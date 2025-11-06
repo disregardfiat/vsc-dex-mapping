@@ -2,7 +2,7 @@ package router
 
 import (
 	"context"
-	"math/big"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,57 +26,70 @@ func TestNewService(t *testing.T) {
 func TestComputeDirectRoute(t *testing.T) {
 	svc := NewService(VSCConfig{})
 
-	// Test BTC -> HBD direct route (now supported)
+	// Test BTC -> HBD direct route (using placeholder pool logic)
 	params := SwapParams{
-		FromAsset:   "BTC",
-		ToAsset:     "HBD",
-		Amount:      100000, // 0.001 BTC
-		MinOut:      9000,   // Min 9 HBD
-		SlippageBps: 50,     // 0.5%
-		Sender:      "test-user",
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     100000, // 0.001 BTC
+		MinAmountOut: 9000,   // Min 9 HBD
+		MaxSlippage:  50,     // 0.5%
+		Sender:       "test-user",
 	}
 
 	result, err := svc.ComputeRoute(context.Background(), params)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Greater(t, result.AmountOut, int64(0))
-	assert.Equal(t, 1, len(result.Route)) // Direct route has 1 hop
+	assert.Equal(t, []string{"hive"}, result.Route) // Simplified route representation
+	assert.True(t, result.Success)
 }
 
 func TestComputeHbdSavingsToHbdRoute(t *testing.T) {
 	svc := NewService(VSCConfig{})
 
 	params := SwapParams{
-		FromAsset:   "HBD_SAVINGS",
-		ToAsset:     "HBD",
-		Amount:      1000000, // 1 HBD_SAVINGS
-		MinOut:      950000,  // Min 0.95 HBD
-		SlippageBps: 50,
-		Sender:      "test-user",
+		AssetIn:      "HBD_SAVINGS",
+		AssetOut:     "HBD",
+		AmountIn:     1000000, // 1 HBD_SAVINGS
+		MinAmountOut: 900000,  // Min 0.90 HBD (allowing for fees and price impact)
+		MaxSlippage:  50,
+		Sender:       "test-user",
 	}
 
 	result, err := svc.ComputeRoute(context.Background(), params)
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	if !result.Success {
+		t.Logf("Swap failed: %s", result.ErrorMessage)
+	}
+	assert.True(t, result.Success, "swap should succeed: %s", result.ErrorMessage)
 	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, []string{"hive"}, result.Route)
+	// For 1:1 pool with fees, output should be slightly less than input
+	assert.Less(t, result.AmountOut, params.AmountIn)
 }
 
 func TestComputeHiveToHbdRoute(t *testing.T) {
 	svc := NewService(VSCConfig{})
 
 	params := SwapParams{
-		FromAsset:   "HIVE",
-		ToAsset:     "HBD",
-		Amount:      1000000, // 1 HIVE
-		MinOut:      950000,  // Min 0.95 HBD
-		SlippageBps: 50,
-		Sender:      "test-user",
+		AssetIn:      "HIVE",
+		AssetOut:     "HBD",
+		AmountIn:     1000000, // 1 HIVE
+		MinAmountOut: 900000,  // Min 0.90 HBD (allowing for fees and price impact)
+		MaxSlippage:  50,
+		Sender:       "test-user",
 	}
 
 	result, err := svc.ComputeRoute(context.Background(), params)
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	if !result.Success {
+		t.Logf("Swap failed: %s", result.ErrorMessage)
+	}
+	assert.True(t, result.Success, "swap should succeed: %s", result.ErrorMessage)
 	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, []string{"hive"}, result.Route)
 }
 
 func TestComputeBtcToHiveRoute(t *testing.T) {
@@ -84,19 +97,22 @@ func TestComputeBtcToHiveRoute(t *testing.T) {
 
 	// BTC -> HIVE should route through HBD: BTC -> HBD -> HIVE
 	params := SwapParams{
-		FromAsset:   "BTC",
-		ToAsset:     "HIVE",
-		Amount:      100000, // 0.001 BTC
-		MinOut:      8000,   // Min 0.008 HIVE
-		SlippageBps: 50,
-		Sender:      "test-user",
+		AssetIn:      "BTC",
+		AssetOut:     "HIVE",
+		AmountIn:     100000, // 0.001 BTC
+		MinAmountOut: 8000,   // Min 0.008 HIVE
+		MaxSlippage:  50,
+		Sender:       "test-user",
 	}
 
 	result, err := svc.ComputeRoute(context.Background(), params)
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success, "swap should succeed")
 	assert.Greater(t, result.AmountOut, int64(0))
 	assert.Equal(t, 2, len(result.Route)) // Two-hop route through HBD
+	assert.Contains(t, result.Route, "hive")
+	assert.Contains(t, result.Route, "hbd-intermediate")
 }
 
 func TestUnsupportedRoute(t *testing.T) {
@@ -104,16 +120,19 @@ func TestUnsupportedRoute(t *testing.T) {
 
 	// Test route that doesn't exist
 	params := SwapParams{
-		FromAsset:   "UNKNOWN",
-		ToAsset:     "HBD",
-		Amount:      1000000,
-		MinOut:      950000,
-		SlippageBps: 50,
-		Sender:      "test-user",
+		AssetIn:      "UNKNOWN",
+		AssetOut:     "HBD",
+		AmountIn:     1000000,
+		MinAmountOut: 950000,
+		MaxSlippage:  50,
+		Sender:       "test-user",
 	}
 
-	_, err := svc.ComputeRoute(context.Background(), params)
-	assert.Error(t, err)
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "unsupported route should fail")
+	assert.Contains(t, result.ErrorMessage, "no pool found")
 }
 
 func TestChainAdapters(t *testing.T) {
@@ -182,18 +201,461 @@ func TestSolanaAdapter(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestCalculateOutput(t *testing.T) {
+// Edge case tests
+
+func TestSwapSameAsset(t *testing.T) {
 	svc := NewService(VSCConfig{})
 
-	// Test AMM calculation: (x + dx) * (y - dy) = x * y
-	// dy = (y * dx) / (x + dx)
-	reserveIn := big.NewInt(1000000)   // 1 BTC reserve
-	reserveOut := big.NewInt(10000000) // 10 HBD reserve
-	amountIn := int64(100000)          // 0.1 BTC in
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "BTC",
+		AmountIn:     100000,
+		MinAmountOut: 90000,
+		MaxSlippage:  50,
+		Sender:       "test-user",
+	}
 
-	output := svc.calculateOutput(amountIn, reserveIn, reserveOut)
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "swapping same asset should fail")
+	assert.Contains(t, result.ErrorMessage, "cannot swap asset to itself")
+}
 
-	// Expected output: (10000000 * 100000) / (1000000 + 100000) = ~909090
-	expected := int64(909090)
-	assert.Equal(t, expected, output)
+func TestSwapZeroAmount(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     0,
+		MinAmountOut: 0,
+		MaxSlippage:  50,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "zero amount swap should fail")
+	assert.Contains(t, result.ErrorMessage, "must be greater than zero")
+}
+
+func TestSwapNegativeAmount(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     -100000,
+		MinAmountOut: 0,
+		MaxSlippage:  50,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "negative amount swap should fail")
+}
+
+func TestSwapSlippageExceeded(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Set an unrealistically high minimum output
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     100000, // 0.001 BTC
+		MinAmountOut: 999999999, // Unrealistically high
+		MaxSlippage:  50,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "swap should fail due to slippage")
+	assert.Contains(t, result.ErrorMessage, "slippage")
+}
+
+func TestSwapInvalidPool(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "UNKNOWN",
+		AssetOut:     "HBD",
+		AmountIn:     1000000,
+		MinAmountOut: 950000,
+		MaxSlippage:  50,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "invalid pool should fail")
+	assert.Contains(t, result.ErrorMessage, "no pool found")
+}
+
+func TestBtcToHbdSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     100000, // 0.001 BTC
+		MinAmountOut: 0,      // No minimum
+		MaxSlippage:  100,    // 1% slippage
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success, "BTC->HBD swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	// HBD amount should match output when swapping to HBD
+	assert.Equal(t, result.HbdAmount, result.AmountOut, "HBD amount should match output for HBD swap")
+	assert.Greater(t, result.AmountOut, int64(0))
+}
+
+func TestHbdToBtcSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "HBD",
+		AssetOut:     "BTC",
+		AmountIn:     1000000, // 1 HBD
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success, "HBD->BTC swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	// HBD amount should match input when swapping from HBD
+	assert.Equal(t, result.HbdAmount, params.AmountIn, "HBD amount should match input for HBD->BTC swap")
+	assert.Greater(t, result.AmountOut, int64(0))
+}
+
+func TestHbdSavingsToHbdSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "HBD_SAVINGS",
+		AssetOut:     "HBD",
+		AmountIn:     1000000, // 1 HBD_SAVINGS
+		MinAmountOut: 0,       // No minimum - allow fees
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	if !result.Success {
+		t.Logf("Swap failed: %s", result.ErrorMessage)
+	}
+	assert.True(t, result.Success, "HBD_SAVINGS->HBD swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, result.HbdAmount, result.AmountOut)
+	// With fees, output should be slightly less than input
+	assert.Less(t, result.AmountOut, params.AmountIn)
+}
+
+func TestHiveToHbdSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "HIVE",
+		AssetOut:     "HBD",
+		AmountIn:     1000000, // 1 HIVE
+		MinAmountOut: 0,       // No minimum - allow fees
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	if !result.Success {
+		t.Logf("Swap failed: %s", result.ErrorMessage)
+	}
+	assert.True(t, result.Success, "HIVE->HBD swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, result.HbdAmount, result.AmountOut)
+}
+
+func TestBtcToHiveTwoHopSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HIVE",
+		AmountIn:     100000, // 0.001 BTC
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success, "BTC->HIVE two-hop swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, 2, len(result.Route), "should be a two-hop route")
+	assert.Greater(t, result.HbdAmount, int64(0), "should have intermediate HBD amount")
+}
+
+func TestHiveToBtcTwoHopSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "HIVE",
+		AssetOut:     "BTC",
+		AmountIn:     1000000, // 1 HIVE
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success, "HIVE->BTC two-hop swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, 2, len(result.Route), "should be a two-hop route")
+}
+
+func TestHbdSavingsToHiveTwoHopSwap(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	params := SwapParams{
+		AssetIn:      "HBD_SAVINGS",
+		AssetOut:     "HIVE",
+		AmountIn:     1000000, // 1 HBD_SAVINGS
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.Success, "HBD_SAVINGS->HIVE two-hop swap should succeed")
+	assert.Greater(t, result.AmountOut, int64(0))
+	assert.Equal(t, 2, len(result.Route), "should be a two-hop route")
+}
+
+func TestCalculateExpectedOutput(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Test with known pool reserves (1 BTC = 10 HBD from defaults)
+	amountIn := int64(100000) // 0.001 BTC
+	expectedOut, err := svc.calculateExpectedOutput(amountIn, "btc-hbd-pool", "BTC", "HBD")
+	require.NoError(t, err)
+	assert.Greater(t, expectedOut, int64(0))
+	
+	// With 1 BTC reserve and 10 HBD reserve, 0.001 BTC should give roughly 0.01 HBD
+	// But after fees, it should be slightly less
+	// Exact calculation: k = 100000000 * 10000000 = 1e15
+	// amountInAfterFee = 100000 * 9992 / 10000 = 99920
+	// newReserveIn = 100000000 + 99920 = 100099920
+	// amountOut = 10000000 - (1e15 / 100099920) ≈ 10000000 - 9990002 ≈ 9998
+	// So we expect around 9998 HBD (0.009998 HBD)
+	assert.Less(t, expectedOut, int64(10000), "output should be less than 0.01 HBD")
+	assert.Greater(t, expectedOut, int64(9900), "output should be at least 0.0099 HBD")
+}
+
+func TestCalculateMinOutput(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	expectedOut := int64(1000000)
+	maxSlippage := uint64(50) // 0.5%
+	ratio := 1.0
+
+	minOut := svc.calculateMinOutput(expectedOut, maxSlippage, ratio)
+	
+	// With 0.5% slippage, min should be 99.5% of expected
+	expectedMin := int64(float64(expectedOut) * 0.995)
+	assert.Equal(t, expectedMin, minOut)
+}
+
+func TestCalculateMinOutputWithRatio(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	expectedOut := int64(1000000)
+	maxSlippage := uint64(100) // 1%
+	ratio := 0.5 // Use 50% of slippage tolerance
+
+	minOut := svc.calculateMinOutput(expectedOut, maxSlippage, ratio)
+	
+	// With 1% slippage and 0.5 ratio, min should be 99.5% of expected
+	// Using integer arithmetic: 1000000 * 9950 / 10000 = 995000
+	expectedMin := int64(995000)
+	assert.Equal(t, expectedMin, minOut)
+}
+
+// Edge case tests for overflow and pool protection
+
+func TestPoolDrainProtection(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Try to swap more than 50% of reserve
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     60000000, // 0.6 BTC (60% of 1 BTC reserve)
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "swap should fail due to pool drain protection")
+	assert.Contains(t, result.ErrorMessage, "exceeds maximum allowed")
+	assert.Contains(t, result.ErrorMessage, "50%")
+}
+
+func TestSwapAmountTooSmallAfterFees(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Try to swap amount that would be 0 after fees
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     1, // 1 satoshi - very small
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Should either succeed with very small output or fail with "too small after fees"
+	// The current implementation should reject amounts that result in 0 after fee
+	if !result.Success {
+		assert.Contains(t, result.ErrorMessage, "too small")
+	}
+}
+
+func TestInvalidFee(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Create a mock pool querier with invalid fee
+	mockQuerier := &MockPoolQuerier{
+		pools: map[string]*PoolInfoWithReserves{
+			"btc-hbd-pool": {
+				ContractId: "btc-hbd-pool",
+				Asset0:     "BTC",
+				Asset1:     "HBD",
+				Reserve0:   100000000,
+				Reserve1:   10000000,
+				Fee:        20000, // 200% fee - invalid
+			},
+		},
+	}
+	svc.SetPoolQuerier(mockQuerier)
+
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     100000,
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success, "swap should fail with invalid fee")
+	assert.Contains(t, result.ErrorMessage, "invalid fee")
+}
+
+func TestLargeReserveCalculation(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Create a pool with very large reserves to test overflow protection
+	mockQuerier := &MockPoolQuerier{
+		pools: map[string]*PoolInfoWithReserves{
+			"btc-hbd-pool": {
+				ContractId: "btc-hbd-pool",
+				Asset0:     "BTC",
+				Asset1:     "HBD",
+				Reserve0:   1000000000000000, // 10M BTC in satoshis
+				Reserve1:   100000000000000,  // 100M HBD
+				Fee:        8,
+			},
+		},
+	}
+	svc.SetPoolQuerier(mockQuerier)
+
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HBD",
+		AmountIn:     100000000, // 1 BTC
+		MinAmountOut: 0,
+		MaxSlippage:  100,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Should succeed with big.Int calculations preventing overflow
+	assert.True(t, result.Success, "swap should succeed even with large reserves")
+	assert.Greater(t, result.AmountOut, int64(0))
+}
+
+func TestTwoHopSwapFirstFails(t *testing.T) {
+	svc := NewService(VSCConfig{})
+
+	// Create a scenario where first swap would fail
+	// This tests error handling in two-hop swaps
+	params := SwapParams{
+		AssetIn:      "BTC",
+		AssetOut:     "HIVE",
+		AmountIn:     1, // Very small amount that might fail
+		MinAmountOut: 999999999, // Unrealistically high minimum
+		MaxSlippage:  50,
+		Sender:       "test-user",
+	}
+
+	result, err := svc.ComputeRoute(context.Background(), params)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	// Should fail and return empty route
+	assert.False(t, result.Success)
+	assert.Equal(t, []string{}, result.Route, "route should be empty on failure")
+}
+
+// MockPoolQuerier for testing
+type MockPoolQuerier struct {
+	pools map[string]*PoolInfoWithReserves
+}
+
+func (m *MockPoolQuerier) GetPoolByID(poolID string) (*PoolInfoWithReserves, error) {
+	pool, ok := m.pools[poolID]
+	if !ok {
+		return nil, fmt.Errorf("pool not found: %s", poolID)
+	}
+	return pool, nil
+}
+
+func (m *MockPoolQuerier) GetPoolsByAsset(asset string) ([]PoolInfoWithReserves, error) {
+	var pools []PoolInfoWithReserves
+	for _, pool := range m.pools {
+		if pool.Asset0 == asset || pool.Asset1 == asset {
+			pools = append(pools, *pool)
+		}
+	}
+	return pools, nil
 }

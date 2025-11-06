@@ -68,12 +68,12 @@ func (s *Server) handleComputeRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := SwapParams{
-		FromAsset:   req.FromAsset,
-		ToAsset:     req.ToAsset,
-		Amount:      req.Amount,
-		MinOut:      req.MinOut,
-		SlippageBps: req.SlippageBps,
-		Sender:      req.Sender,
+		AssetIn:      req.FromAsset,
+		AssetOut:     req.ToAsset,
+		AmountIn:     req.Amount,
+		MinAmountOut: req.MinOut,
+		MaxSlippage:  req.SlippageBps,
+		Sender:       req.Sender,
 	}
 
 	result, err := s.router.ComputeRoute(r.Context(), params)

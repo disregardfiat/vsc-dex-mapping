@@ -87,8 +87,8 @@ func (s *Service) GetCrossChainAssets() []string {
 // ComputeCrossChainRoute computes a route that involves cross-chain operations
 func (s *Service) ComputeCrossChainRoute(ctx context.Context, params SwapParams) (*SwapResult, error) {
 	// Check if this involves cross-chain assets
-	fromChain := s.getChainForAsset(params.FromAsset)
-	toChain := s.getChainForAsset(params.ToAsset)
+	fromChain := s.getChainForAsset(params.AssetIn)
+	toChain := s.getChainForAsset(params.AssetOut)
 
 	if fromChain == "" && toChain == "" {
 		// Regular VSC-only swap

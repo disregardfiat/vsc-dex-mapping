@@ -1,120 +1,205 @@
+// Proof of Concept VSC Smart Contract in Golang
+//
+// Build command: tinygo build -o main.wasm -gc=custom -scheduler=none -panic=trap -no-debug -target=wasm-unknown main.go
+// Inspect Output: wasmer inspect main.wasm
+// Run command (only works w/o SDK imports): wasmedge run main.wasm entrypoint 0
+//
+// Caveats:
+// - Go routines, channels, and defer are disabled
+// - panic() always halts the program, since you can't recover in a deferred function call
+// - must import sdk or build fails
+// - to mark a function as a valid entrypoint, it must be manually exported (//go:wasmexport <entrypoint-name>)
+//
+// TODO:
+// - when panic()ing, call `env.abort()` instead of executing the unreachable WASM instruction
+// - Remove _initalize() export & double check not necessary
+
 package main
 
 import (
-	"unsafe"
+	"fmt"
 
-	"github.com/vsc-eco/go-vsc-node/sdk"
+	_ "github.com/vsc-eco/go-vsc-node/modules/wasm/sdk" // ensure sdk is imported
+	"github.com/vsc-eco/vsc-dex-mapping/contracts/btc-mapping/blocklist"
+	"github.com/vsc-eco/vsc-dex-mapping/contracts/btc-mapping/mapping"
+
+	"github.com/vsc-eco/go-vsc-node/modules/wasm/sdk"
+
+	"github.com/CosmWasm/tinyjson"
 )
 
-// BTC Mapping Contract
-// Implements Bitcoin UTXO mapping with SPV verification for VSC DEX integration
+const oracleAddress = "did:vsc:oracle:btc"
+const publicKeyStateKey = "public_key"
 
-// Contract state
-type ContractState struct {
-	// Rolling window of accepted Bitcoin headers (for SPV verification)
-	Headers map[uint32][]byte // height -> block header bytes
-
-	// Deposit receipts: txid+vout -> deposit info
-	Deposits map[string]DepositInfo
-
-	// Withdrawal intents
-	Withdrawals map[string]WithdrawalInfo
-
-	// Current tip height accepted by contract
-	TipHeight uint32
-
-	// Minimum confirmations required
-	MinConfirmations uint32
-}
-
-type DepositInfo struct {
-	TxID      string
-	VOut      uint32
-	Amount    uint64 // satoshis
-	Owner     string // VSC address
-	Height    uint32 // block height
-	Confirmed bool
-}
-
-type WithdrawalInfo struct {
-	ID       string
-	Amount   uint64
-	Owner    string // VSC address
-	BtcAddr  string // Bitcoin script/address
-	Status   string // "pending", "confirmed", "completed"
-}
-
-// Initialize contract state
-//export init
-func init() {
-	state := ContractState{
-		Headers:         make(map[uint32][]byte),
-		Deposits:        make(map[string]DepositInfo),
-		Withdrawals:     make(map[string]WithdrawalInfo),
-		TipHeight:       0,
-		MinConfirmations: 6, // Standard BTC confirmations
+//go:wasmexport seed_blocks
+func SeedBlocks(blockSeedInput *string) *string {
+	// this should be oracle address for mainnet and owner address for testnet
+	if sdk.GetEnv().Sender.Address.String() != *sdk.GetEnvKey("contract.owner") {
+		sdk.Abort("no permission")
 	}
 
-	// Store initial state
-	sdk.SetState("state", state)
+	blockData := blocklist.BlockDataFromState()
+
+	if len(blockData.BlockMap) > 0 {
+		sdk.Abort(fmt.Sprintf("block data already seeded, last height: %d", blockData.LastHeight))
+	}
+
+	blockData.HandleSeedBlocks(blockSeedInput)
+	blockData.SaveToState()
+
+	outMsg := fmt.Sprintf("last height: %d", blockData.LastHeight)
+	return &outMsg
 }
 
-// Submit Bitcoin headers for verification window
-//export submitHeaders
-func submitHeaders(headersPtr unsafe.Pointer, headersLen uint32) uint32 {
-	// TODO: Parse and validate headers
-	// TODO: Update rolling verification window
-	// TODO: Emit HeaderSubmitted event
+//go:wasmexport add_blocks
+func AddBlocks(addBlocksInput *string) *string {
+	// this should be oracle address for mainnet and owner address for testnet
+	if sdk.GetEnv().Sender.Address.String() != *sdk.GetEnvKey("contract.owner") {
+		sdk.Abort("no permission")
+	}
 
-	return 0 // success
+	var addBlocksObj blocklist.AddBlocksInput
+	err := tinyjson.Unmarshal([]byte(*addBlocksInput), &addBlocksObj)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	blockHeaders, err := blocklist.DivideHeaderList(&addBlocksObj.Blocks)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	blockData := blocklist.BlockDataFromState()
+	err = blockData.HandleAddBlocks(blockHeaders)
+	// save it before handling add blocks error, because failure there is a more extreme fail case
+	errCritical := blockData.SaveToState()
+	if errCritical != nil {
+		sdk.Abort(errCritical.Error())
+	}
+	// handle adding blocks error
+	outMsg := blocklist.AddBlockOutput{
+		LastBlockHeight: blockData.LastHeight,
+		Success:         err == nil,
+	}
+	if err != nil {
+		outMsg.Error = err.Error()
+	}
+	outMsgBytes, err := tinyjson.Marshal(outMsg)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+	outMsgString := string(outMsgBytes)
+
+	// update base fee rate, do this after blocks because blocks more likely to fail
+	systemSupply, err := mapping.SupplyFromState()
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+	systemSupply.BaseFeeRate = addBlocksObj.LatestFee
+	mapping.SaveSupplyToState(systemSupply)
+
+	return &outMsgString
 }
 
-// Prove Bitcoin deposit and mint mapped BTC
-//export proveDeposit
-func proveDeposit(proofPtr unsafe.Pointer, proofLen uint32) uint32 {
-	// TODO: Parse SPV proof
-	// TODO: Verify against accepted headers
-	// TODO: Mint mapped BTC tokens
-	// TODO: Record deposit receipt
-	// TODO: Emit DepositMinted event
+//go:wasmexport map
+func Map(incomingTx *string) *string {
+	var mapInstructions mapping.MappingInputData
+	err := tinyjson.Unmarshal([]byte(*incomingTx), &mapInstructions)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
 
-	return 0 // minted amount
+	publicKey := sdk.StateGetObject(publicKeyStateKey)
+
+	contractState, err := mapping.InitializeMappingState(*publicKey, mapInstructions.Instructions...)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	err = contractState.HandleMap(mapInstructions.TxData)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	err = contractState.SaveToState()
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	ret := "success"
+	return &ret
 }
 
-// Request withdrawal (burn mapped BTC)
-//export requestWithdraw
-func requestWithdraw(amount uint64, btcAddrPtr unsafe.Pointer, btcAddrLen uint32) uint32 {
-	// TODO: Verify caller owns mapped BTC
-	// TODO: Burn tokens
-	// TODO: Create withdrawal intent
-	// TODO: Emit WithdrawalRequested event
+//go:wasmexport unmap
+func Unmap(tx *string) *string {
+	var unmapInstructions mapping.UnmappingInputData
+	err := tinyjson.Unmarshal([]byte(*tx), &unmapInstructions)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
 
-	return 0 // withdrawal ID
+	publicKey := sdk.StateGetObject(publicKeyStateKey)
+
+	contractState, err := mapping.IntializeContractState(*publicKey)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+	rawTx := contractState.HandleUnmap(&unmapInstructions)
+	err = contractState.SaveToState()
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	return &rawTx
 }
 
-// Get current tip height
-//export getTip
-func getTip() uint32 {
-	state := sdk.GetState("state").(ContractState)
-	return state.TipHeight
+//go:wasmexport transfer
+func Transfer(tx *string) *string {
+	var transferInstructions mapping.TransferInputData
+	err := tinyjson.Unmarshal([]byte(*tx), &transferInstructions)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	balances, err := mapping.GetBalanceMap()
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+	mapping.HandleTrasfer(&transferInstructions, balances)
+	err = mapping.SaveBalanceMap(balances)
+	if err != nil {
+		sdk.Abort(err.Error())
+	}
+
+	return tx
 }
 
-// Get deposit info
-//export getDeposit
-func getDeposit(txidPtr unsafe.Pointer, txidLen uint32, vout uint32) unsafe.Pointer {
-	// TODO: Return deposit info as JSON bytes
+//go:wasmexport register_public_key
+func RegisterPublicKey(key *string) *string {
+	env := sdk.GetEnv()
+	// leave this as owner always
+	if env.Sender.Address.String() != *sdk.GetEnvKey("contract.owner") {
+		sdk.Abort("no permission")
+	}
 
-	return nil
+	existing := sdk.StateGetObject(publicKeyStateKey)
+	if *existing == "" {
+		sdk.StateSetObject(publicKeyStateKey, *key)
+		result := "success"
+		return &result
+	}
+	result := fmt.Sprintf("key already registered: %s", *existing)
+	return &result
 }
 
-// Get withdrawal info
-//export getWithdrawal
-func getWithdrawal(idPtr unsafe.Pointer, idLen uint32) unsafe.Pointer {
-	// TODO: Return withdrawal info as JSON bytes
+//go:wasmexport create_key_pair
+func CreateKeyPair(_ *string) *string {
+	// leave this as owner always
+	if sdk.GetEnv().Sender.Address.String() != *sdk.GetEnvKey("contract.owner") {
+		sdk.Abort("no permission")
+	}
 
-	return nil
-}
-
-func main() {
-	// Contract entry point - TinyGo requires this
+	keyId := "main"
+	sdk.TssCreateKey(keyId, "ecdsa")
+	return &keyId
 }

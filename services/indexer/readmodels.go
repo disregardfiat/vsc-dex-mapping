@@ -162,10 +162,18 @@ func (dm *DexReadModel) QueryTokens() ([]TokenInfo, error) {
 	return tokens, nil
 }
 
-// QueryDeposits returns deposit information (placeholder)
+// QueryDeposits returns deposit information
 func (dm *DexReadModel) QueryDeposits() ([]DepositInfo, error) {
-	// TODO: Implement deposit tracking read model
-	return []DepositInfo{}, nil
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+
+	// Return a copy of deposits
+	deposits := make([]DepositInfo, 0, len(dm.deposits))
+	for _, deposit := range dm.deposits {
+		deposits = append(deposits, deposit)
+	}
+
+	return deposits, nil
 }
 
 // GetPool returns a specific pool by ID

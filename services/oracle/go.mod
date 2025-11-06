@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/rpcclient v1.7.1
+	github.com/hasura/go-graphql-client v0.12.2
 	golang.org/x/crypto v0.21.0
 )
 

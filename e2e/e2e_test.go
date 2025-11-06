@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdk "github.com/vsc-eco/vsc-dex-mapping/sdk/go"
 )
 
 func TestFullBtcHbdFlow(t *testing.T) {
@@ -143,6 +145,72 @@ func TestRouteComputation(t *testing.T) {
 func TestIndexerSync(t *testing.T) {
 	// TODO: Test indexer event processing
 	t.Skip("Indexer tests not implemented")
+}
+
+func TestBtcDepositFlow(t *testing.T) {
+	// Test the complete BTC deposit flow
+	t.Skip("TODO: Implement full BTC deposit integration test")
+
+	// This would test:
+	// 1. Create a mock Bitcoin transaction
+	// 2. Generate SPV proof
+	// 3. Submit proof to btc-mapping contract via SDK
+	// 4. Verify mapped BTC tokens are minted
+	// 5. Check indexer updates with deposit info
+
+	// Setup test environment
+	env := &TestEnvironment{
+		vscEndpoint:        "http://localhost:4000",
+		userAddr:           "test-user",
+		userKey:            "test-key",
+		initialBtcBalance:  0,
+		btcMappingContract: "btc-mapping-contract",
+	}
+
+	// Create mock BTC transaction proof
+	proof := createMockBtcProof(t, env)
+
+	// Submit deposit proof
+	client, err := sdk.NewClient(&sdk.Config{
+		VSCEndpoint: env.vscEndpoint,
+		ActiveKey:   env.userKey,
+		Contracts: sdk.ContractConfig{
+			BtcMapping: env.btcMappingContract,
+		},
+	})
+	require.NoError(t, err)
+
+	mintedAmount, err := client.ProveBtcDeposit(context.Background(), proof)
+	require.NoError(t, err)
+	assert.Greater(t, mintedAmount, uint64(0))
+
+	// TODO: Verify indexer shows the deposit
+	// TODO: Verify token balance increased
+}
+
+func createMockBtcProof(t *testing.T, env *TestEnvironment) []byte {
+	// Create a mock SPV proof for testing
+	// Format: [txid(32)][vout(4)][amount(8)][block_header(80)]
+
+	txid := make([]byte, 32)
+	for i := range txid {
+		txid[i] = byte(i % 256)
+	}
+
+	vout := uint32(0)
+	amount := uint64(100000) // 0.001 BTC
+
+	// Mock block header
+	blockHeader := make([]byte, 80)
+
+	var proof []byte
+	proof = append(proof, txid...)
+	proof = append(proof, byte(vout), byte(vout>>8), byte(vout>>16), byte(vout>>24))
+	proof = append(proof, byte(amount), byte(amount>>8), byte(amount>>16), byte(amount>>24),
+		byte(amount>>32), byte(amount>>40), byte(amount>>48), byte(amount>>56))
+	proof = append(proof, blockHeader...)
+
+	return proof
 }
 
 // Test environment

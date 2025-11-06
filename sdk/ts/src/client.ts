@@ -1,5 +1,9 @@
 import { GraphQLWebSocketClient } from 'graphql-ws';
 
+interface TransactionSubmitResult {
+  id: string;
+}
+
 export interface Config {
   vscEndpoint: string;
   wsEndpoint: string;
@@ -186,13 +190,72 @@ export class VSCDexClient {
   }
 
   private async broadcastTx(payload: any): Promise<void> {
-    // TODO: Implement actual VSC transaction broadcasting
-    console.log('Broadcasting transaction:', payload);
+    // Create GraphQL mutation payload
+    const mutation = `
+      mutation SubmitTransaction($tx: String!, $sig: String!) {
+        submitTransactionV1(tx: $tx, sig: $sig) {
+          id
+        }
+      }
+    `;
+
+    // For now, create mock signed transaction
+    // TODO: Implement proper transaction creation and signing
+    const mockTx = Buffer.from('mock_transaction_bytes').toString('base64');
+    const mockSig = Buffer.from('mock_signature_bytes').toString('base64');
+
+    const variables = {
+      tx: mockTx,
+      sig: mockSig,
+    };
+
+    const response = await fetch(`${this.config.vscEndpoint}/api/v1/graphql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: mutation,
+        variables,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Transaction broadcast failed: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    if (result.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+
+    console.log('Transaction broadcasted successfully, ID:', result.data.submitTransactionV1.id);
   }
 
   private async callContract(payload: any): Promise<any> {
-    // TODO: Implement contract calls via GraphQL
+    // For contract calls (queries), we use the same GraphQL endpoint
+    // but would need to implement contract query mechanism
+    // For now, return mock responses
+
     console.log('Calling contract:', payload);
-    return {};
+
+    // Mock responses based on method
+    switch (payload.method) {
+      case 'proveDeposit':
+        return { mintedAmount: 100000 }; // Mock minted amount
+      case 'getDeposit':
+        return {
+          deposit: {
+            txid: payload.args.txid,
+            vout: payload.args.vout,
+            amount: 100000,
+            owner: 'test-user',
+            height: 800000,
+            confirmed: true,
+          }
+        };
+      default:
+        return {};
+    }
   }
 }
