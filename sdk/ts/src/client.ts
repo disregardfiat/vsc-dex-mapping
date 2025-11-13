@@ -5,8 +5,10 @@ interface TransactionSubmitResult {
 }
 
 export interface Config {
-  vscEndpoint: string;
-  wsEndpoint: string;
+  vscEndpoint: string; // VSC GraphQL endpoint
+  routerEndpoint?: string; // Router service endpoint (defaults to vscEndpoint if not provided)
+  indexerEndpoint?: string; // Indexer service endpoint
+  wsEndpoint?: string; // Optional WebSocket endpoint for subscriptions
   contracts: {
     btcMapping: string;
     tokenRegistry: string;
@@ -32,13 +34,22 @@ export interface DepositInfo {
 
 export class VSCDexClient {
   private config: Config;
-  private wsClient: GraphQLWebSocketClient;
+  private wsClient: GraphQLWebSocketClient | null = null;
+
+  private routerEndpoint: string;
+  private indexerEndpoint: string | null;
 
   constructor(config: Config) {
     this.config = config;
-    this.wsClient = new GraphQLWebSocketClient(config.wsEndpoint, {
-      connectionParams: {},
-    });
+    this.routerEndpoint = config.routerEndpoint || config.vscEndpoint;
+    this.indexerEndpoint = config.indexerEndpoint || null;
+    
+    // Only initialize WebSocket client if endpoint is provided
+    if (config.wsEndpoint) {
+      this.wsClient = new GraphQLWebSocketClient(config.wsEndpoint, {
+        connectionParams: {},
+      });
+    }
   }
 
   /**
@@ -110,7 +121,7 @@ export class VSCDexClient {
    */
   async computeDexRoute(fromAsset: string, toAsset: string, amount: number): Promise<RouteResult> {
     // Call router service HTTP API
-    const response = await fetch(`${this.config.vscEndpoint}/router/route`, {
+    const response = await fetch(`${this.routerEndpoint}/api/v1/route`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -121,7 +132,59 @@ export class VSCDexClient {
     });
 
     if (!response.ok) {
-      throw new Error(`Router service error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Router service error: ${response.statusText} - ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get all pools from indexer
+   */
+  async getPools(): Promise<any[]> {
+    if (!this.indexerEndpoint) {
+      throw new Error('Indexer endpoint not configured');
+    }
+
+    const response = await fetch(`${this.indexerEndpoint}/api/v1/pools`);
+    if (!response.ok) {
+      throw new Error(`Indexer service error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get all tokens from indexer
+   */
+  async getTokens(): Promise<any[]> {
+    if (!this.indexerEndpoint) {
+      throw new Error('Indexer endpoint not configured');
+    }
+
+    const response = await fetch(`${this.indexerEndpoint}/api/v1/tokens`);
+    if (!response.ok) {
+      throw new Error(`Indexer service error: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get a specific pool by ID
+   */
+  async getPool(poolId: string): Promise<any | null> {
+    if (!this.indexerEndpoint) {
+      throw new Error('Indexer endpoint not configured');
+    }
+
+    const response = await fetch(`${this.indexerEndpoint}/api/v1/pools/${poolId}`);
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Indexer service error: ${response.statusText}`);
     }
 
     return response.json();
@@ -161,32 +224,47 @@ export class VSCDexClient {
   }
 
   /**
-   * Subscribe to DEX events
+   * Subscribe to DEX events (WebSocket subscriptions - may not be supported by VSC yet)
+   * Falls back to polling if WebSocket is not available
    */
   subscribeToEvents(callback: (event: any) => void): () => void {
-    const subscription = this.wsClient.subscribe(
-      {
-        query: `
-          subscription {
-            events(filter: {contracts: ["${this.config.contracts.btcMapping}", "${this.config.contracts.dexRouter}"]}) {
-              type
-              contract
-              method
-              args
-              blockHeight
-              txId
-            }
-          }
-        `,
-      },
-      {
-        next: (data) => callback(data),
-        error: (err) => console.error('Subscription error:', err),
-        complete: () => console.log('Subscription completed'),
-      }
-    );
+    if (!this.wsClient) {
+      console.warn('WebSocket endpoint not configured. Subscriptions not available.');
+      // Could implement polling fallback here
+      return () => {}; // No-op unsubscribe
+    }
 
-    return () => subscription.unsubscribe();
+    try {
+      const subscription = this.wsClient.subscribe(
+        {
+          query: `
+            subscription {
+              events(filter: {contracts: ["${this.config.contracts.btcMapping}", "${this.config.contracts.dexRouter}"]}) {
+                type
+                contract
+                method
+                args
+                blockHeight
+                txId
+              }
+            }
+          `,
+        },
+        {
+          next: (data) => callback(data),
+          error: (err) => {
+            console.error('Subscription error:', err);
+            console.warn('WebSocket subscription failed. VSC may not support subscriptions yet.');
+          },
+          complete: () => console.log('Subscription completed'),
+        }
+      );
+
+      return () => subscription.unsubscribe();
+    } catch (err) {
+      console.error('Failed to create subscription:', err);
+      return () => {}; // No-op unsubscribe
+    }
   }
 
   private async broadcastTx(payload: any): Promise<void> {

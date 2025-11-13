@@ -20,6 +20,7 @@ func main() {
 		vscKey         = flag.String("vsc-key", "", "VSC active key for transactions")
 		vscUsername    = flag.String("vsc-username", "", "VSC username")
 		port           = flag.String("port", "8080", "HTTP server port")
+		indexerEndpoint = flag.String("indexer-endpoint", "http://localhost:8081", "Indexer service HTTP endpoint")
 		btcMapping     = flag.String("btc-mapping-contract", "", "BTC mapping contract ID")
 		tokenRegistry  = flag.String("token-registry-contract", "", "Token registry contract ID")
 		dexRouter      = flag.String("dex-router-contract", "", "DEX router contract ID")
@@ -45,6 +46,16 @@ func main() {
 	})
 
 	svc := router.NewService(config, sdkClient)
+	
+	// Connect router to indexer for real-time pool data
+	if *indexerEndpoint != "" {
+		poolQuerier := router.NewIndexerPoolQuerier(*indexerEndpoint)
+		svc.SetPoolQuerier(poolQuerier)
+		log.Printf("Router connected to indexer at %s", *indexerEndpoint)
+	} else {
+		log.Printf("Warning: No indexer endpoint provided, router will use hardcoded fallback pools")
+	}
+	
 	server := router.NewServer(svc, *port)
 
 	// Handle graceful shutdown

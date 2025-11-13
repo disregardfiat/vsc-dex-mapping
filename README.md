@@ -116,8 +116,10 @@ Automated swap routing and transaction composition:
 **Running:**
 ```bash
 cd services/router
-go run cmd/main.go --vsc-node http://localhost:4000 --port 8080
+go run cmd/main.go --vsc-node http://localhost:4000 --port 8080 --indexer-endpoint http://localhost:8081
 ```
+
+**Note**: The `--indexer-endpoint` flag connects the router to the indexer service for real-time pool data. If not provided, the router falls back to hardcoded test pools.
 
 **Architecture Pattern:**
 ```go
@@ -135,9 +137,11 @@ err := s.dexExecutor.ExecuteDexSwap(ctx, result.AmountOut, result.Route, result.
 
 #### Indexer Service (`services/indexer/`)
 Read model indexer that:
-- Subscribes to VSC GraphQL events
-- Builds projections for pools, tokens, and bridge operations
-- Exposes REST/GraphQL APIs for frontend consumption
+- **Polls VSC GraphQL** for contract outputs and events (default: every 5 seconds)
+- **Builds projections** for pools, tokens, and bridge operations
+- **Exposes HTTP REST APIs** for frontend consumption (`/api/v1/pools`, `/api/v1/tokens`, `/api/v1/deposits`)
+- **Tracks real-time pool reserves** for accurate DEX routing
+- **Optional WebSocket support** (attempts WebSocket first, falls back to polling if unavailable)
 
 **Running:**
 ```bash
@@ -153,6 +157,8 @@ go run cmd/main.go --http-endpoint http://localhost:4000 --http-port 8081 --cont
   - Tracks block height to only process new events
 - **Optional WebSocket**: If `--ws-endpoint` is provided, attempts WebSocket subscriptions first
   - Automatically falls back to polling if WebSocket connection fails
+- **Event Processing**: Handles `createPool`, `addLiquidity`, `swap`, `registerToken`, `depositMinted`, `depositConfirmed` events
+- **Router Integration**: Router service queries indexer for real-time pool data via `IndexerPoolQuerier` adapter
   - Future-ready for when VSC supports GraphQL subscriptions
 
 ### Smart Contracts
@@ -279,8 +285,8 @@ Deployment and administration utilities:
    # Terminal 1: Oracle
    go run services/oracle/cmd/main.go --btc-host localhost:8332 --vsc-node http://localhost:4000
 
-   # Terminal 2: Router
-   go run services/router/cmd/main.go --vsc-node http://localhost:4000 --port 8080
+   # Terminal 2: Router (connected to indexer)
+   go run services/router/cmd/main.go --vsc-node http://localhost:4000 --port 8080 --indexer-endpoint http://localhost:8081
 
    # Terminal 3: Indexer
    go run services/indexer/cmd/main.go --http-endpoint http://localhost:4000 --http-port 8081 --contracts "btc-mapping-contract-id,dex-router-contract-id"
@@ -391,9 +397,14 @@ vsc-dex-mapping/
 - ✅ Service management
 
 #### **Indexer** (`services/indexer/`)
-- ✅ Pool data read models
+- ✅ **Fully Implemented**: HTTP polling-based event indexing
+- ✅ Pool data read models with real-time updates
 - ✅ Token registry queries
-- ✅ Deposit tracking
+- ✅ Deposit tracking (BTC deposits)
+- ✅ HTTP API endpoints (`/api/v1/pools`, `/api/v1/tokens`, `/api/v1/deposits`)
+- ✅ Router integration via `IndexerPoolQuerier` adapter
+- ✅ WebSocket support (optional, with polling fallback)
+- ✅ Event processing for pool creation, liquidity changes, swaps, token registration
 
 ### ⚠️ Implementation Notes
 
@@ -424,7 +435,7 @@ vsc-dex-mapping/
   - LP token management
 
 #### **Advanced Features**
-- ⏳ Real indexer HTTP API (currently stubbed)
+- ✅ **Indexer HTTP API**: Fully implemented with polling-based indexing
 - ⏳ TypeScript SDK completion
 - ⏳ Frontend integration examples
 - ⏳ E2E test implementation (currently stubbed)
