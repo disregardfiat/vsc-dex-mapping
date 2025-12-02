@@ -532,11 +532,6 @@ func executeRemoveLiquidity(poolId string, lpAmountU uint64, provider string) *s
 }
 
 // Helper functions
-func findPool(assetA, assetB string) string {
-	// This is a simplified pool lookup - in practice would need indexing
-	// For now, assume pool IDs are known or iterate through all pools
-	return "1" // Placeholder
-}
 
 func calculateSwapOutput(amountIn, reserveIn, reserveOut, feeBps uint64, isAsset0Input bool) uint64 {
 	feeMultiplier := uint64(10000 - feeBps)
