@@ -5,30 +5,11 @@ import (
 	"encoding/json"
 	"math/bits"
 	"strconv"
+
 	tinyjson "github.com/CosmWasm/tinyjson"
 )
 
 func main() {}
-
-// DEX Instruction Schema
-type DexInstruction struct {
-	Type          string                 `json:"type"`
-	Version       string                 `json:"version"`
-	AssetIn       string                 `json:"asset_in"`
-	AssetOut      string                 `json:"asset_out"`
-	Recipient     string                 `json:"recipient"`
-	SlippageBps   *int                   `json:"slippage_bps,omitempty"`
-	MinAmountOut  *int64                 `json:"min_amount_out,omitempty"`
-	Beneficiary   *string                `json:"beneficiary,omitempty"`
-	RefBps        *int                   `json:"ref_bps,omitempty"`
-	ReturnAddress *ReturnAddress         `json:"return_address,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-}
-
-type ReturnAddress struct {
-	Chain   string `json:"chain"`
-	Address string `json:"address"`
-}
 
 // Contract initialization
 // Payload: version string (e.g. "1.0.0")
@@ -107,13 +88,8 @@ func Execute(payload *string) *string {
 		return &[]string{"error", "payload required"}[1]
 	}
 
-	var rawMsg tinyjson.RawMessage
-	if err := tinyjson.Unmarshal([]byte(*payload), &rawMsg); err != nil {
-		return &[]string{"error", "invalid json payload"}[1]
-	}
-
 	var instruction DexInstruction
-	if err := json.Unmarshal(rawMsg, &instruction); err != nil {
+	if err := tinyjson.Unmarshal([]byte(*payload), &instruction); err != nil {
 		return &[]string{"error", "invalid json payload"}[1]
 	}
 
