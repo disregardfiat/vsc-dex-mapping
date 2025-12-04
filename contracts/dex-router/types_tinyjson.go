@@ -3,8 +3,6 @@
 package main
 
 import (
-	json "encoding/json"
-
 	tinyjson "github.com/CosmWasm/tinyjson"
 	jlexer "github.com/CosmWasm/tinyjson/jlexer"
 	jwriter "github.com/CosmWasm/tinyjson/jwriter"
@@ -248,21 +246,15 @@ func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex2(in *jlexer.Lexer, out 
 			} else {
 				in.Delim('{')
 				if !in.IsDelim('}') {
-					out.Metadata = make(map[string]interface{})
+					out.Metadata = make(map[string]string)
 				} else {
 					out.Metadata = nil
 				}
 				for !in.IsDelim('}') {
 					key := string(in.String())
 					in.WantColon()
-					var v1 interface{}
-					if m, ok := v1.(tinyjson.Unmarshaler); ok {
-						m.UnmarshalTinyJSON(in)
-					} else if m, ok := v1.(json.Unmarshaler); ok {
-						_ = m.UnmarshalJSON(in.Raw())
-					} else {
-						v1 = in.Interface()
-					}
+					var v1 string
+					v1 = string(in.String())
 					(out.Metadata)[key] = v1
 					in.WantComma()
 				}
@@ -346,13 +338,7 @@ func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex2(out *jwriter.Writer, i
 				}
 				out.String(string(v2Name))
 				out.RawByte(':')
-				if m, ok := v2Value.(tinyjson.Marshaler); ok {
-					m.MarshalTinyJSON(out)
-				} else if m, ok := v2Value.(json.Marshaler); ok {
-					out.Raw(m.MarshalJSON())
-				} else {
-					out.Raw(json.Marshal(v2Value))
-				}
+				out.String(string(v2Value))
 			}
 			out.RawByte('}')
 		}

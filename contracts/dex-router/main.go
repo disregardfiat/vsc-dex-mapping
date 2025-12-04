@@ -384,12 +384,12 @@ func executeDeposit(instruction DexInstruction) *string {
 		return &[]string{"error", "amount1 required in metadata"}[1]
 	}
 
-	amt0Float, ok := amt0Interface.(float64)
-	if !ok {
+	amt0Float, err := strconv.ParseFloat(amt0Interface, 64)
+	if err != nil {
 		return &[]string{"error", "amount0 must be number"}[1]
 	}
-	amt1Float, ok := amt1Interface.(float64)
-	if !ok {
+	amt1Float, err := strconv.ParseFloat(amt1Interface, 64)
+	if err != nil {
 		return &[]string{"error", "amount1 must be number"}[1]
 	}
 
@@ -417,8 +417,8 @@ func executeWithdrawal(instruction DexInstruction) *string {
 		return &[]string{"error", "lp_amount required in metadata"}[1]
 	}
 
-	lpAmountFloat, ok := lpAmountInterface.(float64)
-	if !ok {
+	lpAmountFloat, err := strconv.ParseFloat(lpAmountInterface, 64)
+	if err != nil {
 		return &[]string{"error", "lp_amount must be number"}[1]
 	}
 

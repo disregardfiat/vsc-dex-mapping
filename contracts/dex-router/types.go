@@ -4,17 +4,17 @@ package main
 //
 //tinyjson:json
 type DexInstruction struct {
-	Type          string                 `json:"type"`
-	Version       string                 `json:"version"`
-	AssetIn       string                 `json:"asset_in"`
-	AssetOut      string                 `json:"asset_out"`
-	Recipient     string                 `json:"recipient"`
-	SlippageBps   *int                   `json:"slippage_bps,omitempty"`
-	MinAmountOut  *int64                 `json:"min_amount_out,omitempty"`
-	Beneficiary   *string                `json:"beneficiary,omitempty"`
-	RefBps        *int                   `json:"ref_bps,omitempty"`
-	ReturnAddress *ReturnAddress         `json:"return_address,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Type          string            `json:"type"`
+	Version       string            `json:"version"`
+	AssetIn       string            `json:"asset_in"`
+	AssetOut      string            `json:"asset_out"`
+	Recipient     string            `json:"recipient"`
+	SlippageBps   *int              `json:"slippage_bps,omitempty"`
+	MinAmountOut  *int64            `json:"min_amount_out,omitempty"`
+	Beneficiary   *string           `json:"beneficiary,omitempty"`
+	RefBps        *int              `json:"ref_bps,omitempty"`
+	ReturnAddress *ReturnAddress    `json:"return_address,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
 }
 
 //tinyjson:json
