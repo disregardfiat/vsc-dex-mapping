@@ -11,6 +11,10 @@ This directory contains comprehensive examples and test scenarios for the VSC DE
 - `swap-with-referral.json` - Swap with referral fees
 - `swap-with-return-address.json` - Swap with return address for refunds
 
+## API Documentation
+
+For detailed indexer API documentation, see [`../indexer-api.md`](../indexer-api.md).
+
 ## Running the Tests
 
 ### Prerequisites
@@ -74,6 +78,12 @@ cd /path/to/vsc-dex-mapping
 - ✅ Referral fees
 - ✅ Fee claiming
 - ✅ Liquidity withdrawal
+
+### 6. Monitoring & Analytics
+- ✅ Transaction history tracking
+- ✅ Liquidity position monitoring
+- ✅ Rich list generation
+- ✅ Real-time pool analytics
 
 ## Manual Testing
 
@@ -153,12 +163,31 @@ curl -X POST http://localhost:8080/api/v1/route \
 ### Pool State
 ```bash
 # Check all pools
-curl http://localhost:8081/indexer/pools
+curl http://localhost:8081/api/v1/pools
 
 # Check specific pool
-curl -X POST http://localhost:8080/api/v1/contract/dex-router/get_pool \
-  -H "Content-Type: application/json" \
-  -d '"1"'
+curl http://localhost:8081/api/v1/pools/1
+
+# Get liquidity holders for a pool
+curl http://localhost:8081/api/v1/pools/1/accounts
+
+# Get top liquidity holders (rich list)
+curl "http://localhost:8081/api/v1/pools/1/richlist?limit=10"
+```
+
+### Transaction Monitoring
+```bash
+# Get recent transactions
+curl http://localhost:8081/api/v1/transactions
+
+# Get transactions for specific pool
+curl "http://localhost:8081/api/v1/transactions?pool_id=1"
+
+# Get swap transactions only
+curl "http://localhost:8081/api/v1/transactions?type=swap&limit=20"
+
+# Get specific transaction by ID
+curl http://localhost:8081/api/v1/transactions/tx-12345
 ```
 
 ### Transaction Logs
@@ -191,10 +220,14 @@ curl http://localhost:4000/api/v1/graphql \
 curl http://localhost:8080/health
 curl http://localhost:8081/health
 
+# Check indexer API endpoints
+curl http://localhost:8081/api/v1/pools
+curl "http://localhost:8081/api/v1/transactions?limit=5"
+
 # Check VSC node
 curl http://localhost:4000/api/v1/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ block { height } }"}'
+  -d '{"query": "{ localNodeInfo { last_processed_block } }"}'
 ```
 
 ## Performance Benchmarks

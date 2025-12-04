@@ -5,6 +5,7 @@ import (
 	"math/bits"
 	"strconv"
 	sdk "dex-router/sdk"
+	tinyjson "github.com/CosmWasm/tinyjson"
 )
 
 func main() {}
@@ -54,13 +55,18 @@ func CreatePool(payload *string) *string {
 		return &[]string{"error", "payload required"}[1]
 	}
 
+	var rawMsg tinyjson.RawMessage
+	if err := tinyjson.Unmarshal([]byte(*payload), &rawMsg); err != nil {
+		return &[]string{"error", "invalid payload"}[1]
+	}
+
 	var params struct {
 		Asset0 string `json:"asset0"`
 		Asset1 string `json:"asset1"`
 		FeeBps uint64 `json:"fee_bps"`
 	}
 
-	if err := json.Unmarshal([]byte(*payload), &params); err != nil {
+	if err := json.Unmarshal(rawMsg, &params); err != nil {
 		return &[]string{"error", "invalid payload"}[1]
 	}
 
@@ -101,8 +107,13 @@ func Execute(payload *string) *string {
 		return &[]string{"error", "payload required"}[1]
 	}
 
+	var rawMsg tinyjson.RawMessage
+	if err := tinyjson.Unmarshal([]byte(*payload), &rawMsg); err != nil {
+		return &[]string{"error", "invalid json payload"}[1]
+	}
+
 	var instruction DexInstruction
-	if err := json.Unmarshal([]byte(*payload), &instruction); err != nil {
+	if err := json.Unmarshal(rawMsg, &instruction); err != nil {
 		return &[]string{"error", "invalid json payload"}[1]
 	}
 
@@ -480,7 +491,7 @@ func executeAddLiquidity(poolId string, amt0U, amt1U uint64, provider string) *s
 		m1 := amt1U * totalLP / r1
 		minted = min64(m0, m1)
 	}
-	assert(minted > 0)
+	contractAssert(minted > 0)
 
 	// Update state
 	setPoolReserve0(poolId, r0 + amt0U)
@@ -500,7 +511,7 @@ func executeRemoveLiquidity(poolId string, lpAmountU uint64, provider string) *s
 	userLP := getPoolLp(poolId, providerAddr.String())
 	totalLP := getPoolTotalLp(poolId)
 
-	assert(lpAmountU > 0 && lpAmountU <= userLP && totalLP > 0)
+	contractAssert(lpAmountU > 0 && lpAmountU <= userLP && totalLP > 0)
 
 	r0 := getPoolReserve0(poolId)
 	r1 := getPoolReserve1(poolId)
@@ -579,7 +590,13 @@ func GetPool(payload *string) *string {
 		return &[]string{"error", "serialization failed"}[1]
 	}
 
-	result := string(jsonBytes)
+	var rawMsg tinyjson.RawMessage = jsonBytes
+	finalBytes, err := tinyjson.Marshal(&rawMsg)
+	if err != nil {
+		return &[]string{"error", "serialization failed"}[1]
+	}
+
+	result := string(finalBytes)
 	return &result
 }
 

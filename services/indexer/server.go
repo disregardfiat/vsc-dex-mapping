@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -25,9 +26,12 @@ func NewServer(svc *Service, port string) *Server {
 	// Pool endpoints
 	r.HandleFunc("/api/v1/pools", s.handleGetPools).Methods("GET")
 	r.HandleFunc("/api/v1/pools/{id}", s.handleGetPool).Methods("GET")
+	r.HandleFunc("/api/v1/pools/{id}/accounts", s.handleGetPoolAccounts).Methods("GET")
+	r.HandleFunc("/api/v1/pools/{id}/richlist", s.handleGetPoolRichList).Methods("GET")
 
-	// Token endpoints
-
+	// Transaction endpoints
+	r.HandleFunc("/api/v1/transactions", s.handleGetTransactions).Methods("GET")
+	r.HandleFunc("/api/v1/transactions/{id}", s.handleGetTransaction).Methods("GET")
 
 	// Health check
 	r.HandleFunc("/health", s.handleHealth).Methods("GET")
@@ -81,14 +85,142 @@ func (s *Server) handleGetPool(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Pool not found", http.StatusNotFound)
 }
 
+// handleGetPoolAccounts returns liquidity accounts for a specific pool
+func (s *Server) handleGetPoolAccounts(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	poolID := vars["id"]
 
+	// Get the first read model that supports pool queries
+	for _, reader := range s.indexer.readers {
+		if dexReader, ok := reader.(*DexReadModel); ok {
+			accounts, err := dexReader.QueryLiquidityPositions(poolID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"pool_id":  poolID,
+				"accounts": accounts,
+			})
+			return
+		}
+	}
+
+	http.Error(w, "Pool not found", http.StatusNotFound)
+}
+
+// handleGetPoolRichList returns paginated rich list for a specific pool
+func (s *Server) handleGetPoolRichList(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	poolID := vars["id"]
+
+	// Parse pagination parameters
+	offsetStr := r.URL.Query().Get("offset")
+	limitStr := r.URL.Query().Get("limit")
+
+	offset := 0
+	limit := 50 // Default limit
+
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	// Get the first read model that supports pool queries
+	for _, reader := range s.indexer.readers {
+		if dexReader, ok := reader.(*DexReadModel); ok {
+			richList, err := dexReader.QueryRichList(poolID, offset, limit)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"pool_id": poolID,
+				"offset":  offset,
+				"limit":   limit,
+				"holders": richList,
+			})
+			return
+		}
+	}
+
+	http.Error(w, "Pool not found", http.StatusNotFound)
+}
+
+// handleGetTransactions returns transaction history with optional filtering
+func (s *Server) handleGetTransactions(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	poolID := r.URL.Query().Get("pool_id")
+	txType := r.URL.Query().Get("type")
+	limitStr := r.URL.Query().Get("limit")
+
+	limit := 100 // Default limit
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 1000 {
+			limit = l
+		}
+	}
+
+	// Get the first read model that supports transaction queries
+	for _, reader := range s.indexer.readers {
+		if dexReader, ok := reader.(*DexReadModel); ok {
+			transactions, err := dexReader.QueryTransactions(poolID, txType, limit)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"transactions": transactions,
+				"count":        len(transactions),
+			})
+			return
+		}
+	}
+
+	http.Error(w, "No transaction data available", http.StatusInternalServerError)
+}
+
+// handleGetTransaction returns a specific transaction by ID
+func (s *Server) handleGetTransaction(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	txID := vars["id"]
+
+	// Get the first read model that supports transaction queries
+	for _, reader := range s.indexer.readers {
+		if dexReader, ok := reader.(*DexReadModel); ok {
+			transaction, found := dexReader.GetTransaction(txID)
+			if !found {
+				http.Error(w, "Transaction not found", http.StatusNotFound)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(transaction)
+			return
+		}
+	}
+
+	http.Error(w, "Transaction not found", http.StatusNotFound)
+}
 
 // handleHealth provides health check endpoint
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "healthy",
+		"status":  "healthy",
 		"service": "dex-indexer",
 	})
 }

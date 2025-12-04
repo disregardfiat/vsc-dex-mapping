@@ -35,7 +35,7 @@
    go run services/router/cmd/main.go --vsc-node http://localhost:4000
 
    # Terminal 3: Indexer
-   go run services/indexer/cmd/main.go --vsc-ws ws://localhost:4000/graphql
+   go run services/indexer/cmd/main.go --http-endpoint http://localhost:4000 --http-port 8081
    ```
 
 ## Testing

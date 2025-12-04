@@ -197,8 +197,10 @@ type DEXExecutor interface {
 Read model indexer that:
 - **Polls VSC GraphQL** for contract outputs and events (default: every 5 seconds)
 - **Builds projections** for pools, tokens, and DEX operations
-- **Exposes HTTP REST APIs** for frontend consumption (`/api/v1/pools`, `/api/v1/tokens`)
+- **Exposes HTTP REST APIs** for frontend consumption
 - **Tracks real-time pool reserves** for accurate DEX operations
+- **Maintains transaction history** for swap status tracking
+- **Tracks liquidity positions** and holder distributions
 - **Optional WebSocket support** (attempts WebSocket first, falls back to polling if unavailable)
 
 **Running:**
@@ -215,8 +217,25 @@ go run cmd/main.go --http-endpoint http://localhost:4000 --http-port 8081 --cont
   - Tracks block height to only process new events
 - **Optional WebSocket**: If `--ws-endpoint` is provided, attempts WebSocket subscriptions first
   - Automatically falls back to polling if WebSocket connection fails
-- **Event Processing**: Handles `pool_created`, `liquidity_added`, `swap_executed`, `registerToken` events
+- **Event Processing**: Handles `pool_created`, `liquidity_added`, `liquidity_removed`, `swap_executed` events
+- **Data Storage**: Maintains transaction history (last 1000 transactions) and liquidity position tracking
 - **Router Integration**: Router service queries indexer for real-time pool data via `IndexerPoolQuerier` adapter
+
+**REST API Endpoints** (see [`docs/indexer-api.md`](docs/indexer-api.md) for detailed API documentation):
+
+**Pool Endpoints**:
+- `GET /api/v1/pools` - List all indexed pools
+- `GET /api/v1/pools/{id}` - Get specific pool information
+- `GET /api/v1/pools/{id}/accounts` - Get all liquidity positions for a pool
+- `GET /api/v1/pools/{id}/richlist?offset=0&limit=50` - Get paginated rich list of top liquidity holders
+
+**Transaction Endpoints**:
+- `GET /api/v1/transactions` - Get transaction history with optional filtering
+  - Query parameters: `?pool_id=pool-123&type=swap&limit=100`
+- `GET /api/v1/transactions/{txId}` - Get specific transaction by ID
+
+**Health Check**:
+- `GET /health` - Service health status
 
 ### Smart Contracts
 
