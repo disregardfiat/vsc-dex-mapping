@@ -186,7 +186,7 @@ func max64(a, b uint64) uint64 {
 	return b
 }
 
-func assert(cond bool) {
+func contractAssert(cond bool) {
 	if !cond {
 		panic("assertion failed")
 	}

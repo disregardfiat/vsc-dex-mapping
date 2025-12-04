@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"vsc-node/lib/test_utils"
@@ -162,20 +163,18 @@ func TestAddLiquidity(t *testing.T) {
 	// Add liquidity with proper intents
 	intents := []contracts.Intent{
 		{
-			Contract: contractId,
-			To:       "dex_router",
-			From:     "hive:alice",
-			Asset:    "HBD",
-			Amount:   1000000,
-			Memo:     "",
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": strconv.FormatInt(1000000, 10),
+				"token": "HBD",
+			},
 		},
 		{
-			Contract: contractId,
-			To:       "dex_router",
-			From:     "hive:alice",
-			Asset:    "HIVE",
-			Amount:   500000,
-			Memo:     "",
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": strconv.FormatInt(500000, 10),
+				"token": "HIVE",
+			},
 		},
 	}
 
@@ -248,12 +247,11 @@ func TestDirectSwap(t *testing.T) {
 	// Execute swap with proper intents
 	intents := []contracts.Intent{
 		{
-			Contract: contractId,
-			To:       "dex_router",
-			From:     "hive:bob",
-			Asset:    "HBD",
-			Amount:   100000,
-			Memo:     "",
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": strconv.FormatInt(100000, 10),
+				"token": "HBD",
+			},
 		},
 	}
 
@@ -360,20 +358,18 @@ func setupDexTest(ct *test_utils.ContractTest, contractId string) {
 func addLiquidityToPool(ct *test_utils.ContractTest, contractId, poolId string, amt0, amt1 uint64) {
 	intents := []contracts.Intent{
 		{
-			Contract: contractId,
-			To:       "dex_router",
-			From:     "hive:alice",
-			Asset:    "HBD",
-			Amount:   int64(amt0),
-			Memo:     "",
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": strconv.FormatUint(amt0, 10),
+				"token": "HBD",
+			},
 		},
 		{
-			Contract: contractId,
-			To:       "dex_router",
-			From:     "hive:alice",
-			Asset:    "HIVE",
-			Amount:   int64(amt1),
-			Memo:     "",
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": strconv.FormatUint(amt1, 10),
+				"token": "HIVE",
+			},
 		},
 	}
 
