@@ -17,7 +17,153 @@ var (
 	_ tinyjson.Marshaler
 )
 
-func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex(in *jlexer.Lexer, out *DexInstruction) {
+func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex(in *jlexer.Lexer, out *ReturnAddress) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "chain":
+			out.Chain = string(in.String())
+		case "address":
+			out.Address = string(in.String())
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex(out *jwriter.Writer, in ReturnAddress) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"chain\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Chain))
+	}
+	{
+		const prefix string = ",\"address\":"
+		out.RawString(prefix)
+		out.String(string(in.Address))
+	}
+	out.RawByte('}')
+}
+
+// MarshalTinyJSON supports tinyjson.Marshaler interface
+func (v ReturnAddress) MarshalTinyJSON(w *jwriter.Writer) {
+	tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex(w, v)
+}
+
+// UnmarshalTinyJSON supports tinyjson.Unmarshaler interface
+func (v *ReturnAddress) UnmarshalTinyJSON(l *jlexer.Lexer) {
+	tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex(l, v)
+}
+func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex1(in *jlexer.Lexer, out *PoolInfo) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "asset0":
+			out.Asset0 = string(in.String())
+		case "asset1":
+			out.Asset1 = string(in.String())
+		case "reserve0":
+			out.Reserve0 = uint64(in.Uint64())
+		case "reserve1":
+			out.Reserve1 = uint64(in.Uint64())
+		case "fee":
+			out.Fee = uint64(in.Uint64())
+		case "total_lp":
+			out.TotalLp = uint64(in.Uint64())
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex1(out *jwriter.Writer, in PoolInfo) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"asset0\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Asset0))
+	}
+	{
+		const prefix string = ",\"asset1\":"
+		out.RawString(prefix)
+		out.String(string(in.Asset1))
+	}
+	{
+		const prefix string = ",\"reserve0\":"
+		out.RawString(prefix)
+		out.Uint64(uint64(in.Reserve0))
+	}
+	{
+		const prefix string = ",\"reserve1\":"
+		out.RawString(prefix)
+		out.Uint64(uint64(in.Reserve1))
+	}
+	{
+		const prefix string = ",\"fee\":"
+		out.RawString(prefix)
+		out.Uint64(uint64(in.Fee))
+	}
+	{
+		const prefix string = ",\"total_lp\":"
+		out.RawString(prefix)
+		out.Uint64(uint64(in.TotalLp))
+	}
+	out.RawByte('}')
+}
+
+// MarshalTinyJSON supports tinyjson.Marshaler interface
+func (v PoolInfo) MarshalTinyJSON(w *jwriter.Writer) {
+	tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex1(w, v)
+}
+
+// UnmarshalTinyJSON supports tinyjson.Unmarshaler interface
+func (v *PoolInfo) UnmarshalTinyJSON(l *jlexer.Lexer) {
+	tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex1(l, v)
+}
+func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex2(in *jlexer.Lexer, out *DexInstruction) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -94,7 +240,7 @@ func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex(in *jlexer.Lexer, out *
 				if out.ReturnAddress == nil {
 					out.ReturnAddress = new(ReturnAddress)
 				}
-				tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex1(in, out.ReturnAddress)
+				(*out.ReturnAddress).UnmarshalTinyJSON(in)
 			}
 		case "metadata":
 			if in.IsNull() {
@@ -132,7 +278,7 @@ func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex(in *jlexer.Lexer, out *
 		in.Consumed()
 	}
 }
-func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex(out *jwriter.Writer, in DexInstruction) {
+func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex2(out *jwriter.Writer, in DexInstruction) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -184,7 +330,7 @@ func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex(out *jwriter.Writer, in
 	if in.ReturnAddress != nil {
 		const prefix string = ",\"return_address\":"
 		out.RawString(prefix)
-		tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex1(out, *in.ReturnAddress)
+		(*in.ReturnAddress).MarshalTinyJSON(out)
 	}
 	if len(in.Metadata) != 0 {
 		const prefix string = ",\"metadata\":"
@@ -216,14 +362,14 @@ func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex(out *jwriter.Writer, in
 
 // MarshalTinyJSON supports tinyjson.Marshaler interface
 func (v DexInstruction) MarshalTinyJSON(w *jwriter.Writer) {
-	tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex(w, v)
+	tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex2(w, v)
 }
 
 // UnmarshalTinyJSON supports tinyjson.Unmarshaler interface
 func (v *DexInstruction) UnmarshalTinyJSON(l *jlexer.Lexer) {
-	tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex(l, v)
+	tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex2(l, v)
 }
-func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex2(in *jlexer.Lexer, out *CreatePoolParams) {
+func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex3(in *jlexer.Lexer, out *CreatePoolParams) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -258,7 +404,7 @@ func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex2(in *jlexer.Lexer, out 
 		in.Consumed()
 	}
 }
-func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex2(out *jwriter.Writer, in CreatePoolParams) {
+func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex3(out *jwriter.Writer, in CreatePoolParams) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -282,146 +428,10 @@ func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex2(out *jwriter.Writer, i
 
 // MarshalTinyJSON supports tinyjson.Marshaler interface
 func (v CreatePoolParams) MarshalTinyJSON(w *jwriter.Writer) {
-	tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex2(w, v)
-}
-
-// UnmarshalTinyJSON supports tinyjson.Unmarshaler interface
-func (v *CreatePoolParams) UnmarshalTinyJSON(l *jlexer.Lexer) {
-	tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex2(l, v)
-}
-func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex3(in *jlexer.Lexer, out *PoolInfo) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "asset0":
-			out.Asset0 = string(in.String())
-		case "asset1":
-			out.Asset1 = string(in.String())
-		case "reserve0":
-			out.Reserve0 = uint64(in.Uint64())
-		case "reserve1":
-			out.Reserve1 = uint64(in.Uint64())
-		case "fee":
-			out.Fee = uint64(in.Uint64())
-		case "total_lp":
-			out.TotalLp = uint64(in.Uint64())
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex3(out *jwriter.Writer, in PoolInfo) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	{
-		const prefix string = ",\"asset0\":"
-		out.RawString(prefix[1:])
-		out.String(string(in.Asset0))
-	}
-	{
-		const prefix string = ",\"asset1\":"
-		out.RawString(prefix)
-		out.String(string(in.Asset1))
-	}
-	{
-		const prefix string = ",\"reserve0\":"
-		out.RawString(prefix)
-		out.Uint64(uint64(in.Reserve0))
-	}
-	{
-		const prefix string = ",\"reserve1\":"
-		out.RawString(prefix)
-		out.Uint64(uint64(in.Reserve1))
-	}
-	{
-		const prefix string = ",\"fee\":"
-		out.RawString(prefix)
-		out.Uint64(uint64(in.Fee))
-	}
-	{
-		const prefix string = ",\"total_lp\":"
-		out.RawString(prefix)
-		out.Uint64(uint64(in.TotalLp))
-	}
-	out.RawByte('}')
-}
-
-// MarshalTinyJSON supports tinyjson.Marshaler interface
-func (v PoolInfo) MarshalTinyJSON(w *jwriter.Writer) {
 	tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex3(w, v)
 }
 
 // UnmarshalTinyJSON supports tinyjson.Unmarshaler interface
-func (v *PoolInfo) UnmarshalTinyJSON(l *jlexer.Lexer) {
+func (v *CreatePoolParams) UnmarshalTinyJSON(l *jlexer.Lexer) {
 	tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex3(l, v)
-}
-func tinyjsonA17a9c65DecodeExampleComBuildingTinyjsonDex1(in *jlexer.Lexer, out *ReturnAddress) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "chain":
-			out.Chain = string(in.String())
-		case "address":
-			out.Address = string(in.String())
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func tinyjsonA17a9c65EncodeExampleComBuildingTinyjsonDex1(out *jwriter.Writer, in ReturnAddress) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	{
-		const prefix string = ",\"chain\":"
-		out.RawString(prefix[1:])
-		out.String(string(in.Chain))
-	}
-	{
-		const prefix string = ",\"address\":"
-		out.RawString(prefix)
-		out.String(string(in.Address))
-	}
-	out.RawByte('}')
 }

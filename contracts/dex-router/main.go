@@ -2,7 +2,6 @@ package main
 
 import (
 	sdk "dex-router/sdk"
-	"encoding/json"
 	"math/bits"
 	"strconv"
 
@@ -36,13 +35,8 @@ func CreatePool(payload *string) *string {
 		return &[]string{"error", "payload required"}[1]
 	}
 
-	var rawMsg tinyjson.RawMessage
-	if err := tinyjson.Unmarshal([]byte(*payload), &rawMsg); err != nil {
-		return &[]string{"error", "invalid payload"}[1]
-	}
-
 	var params CreatePoolParams
-	if err := tinyjson.Unmarshal(rawMsg, &params); err != nil {
+	if err := tinyjson.Unmarshal([]byte(*payload), &params); err != nil {
 		return &[]string{"error", "invalid payload"}[1]
 	}
 
