@@ -1,25 +1,25 @@
 package main
 
 import (
+	sdk "dex-router/sdk"
 	"math/bits"
 	"strconv"
-	sdk "dex-router/sdk"
 )
 
 // Keys for state storage
 const (
-	keyVersion         = "version"
-	keyNextPoolId      = "next_pool_id"
-	keyPoolPrefix      = "pool/" // pool/{poolId}/...
-	keyPoolAsset0      = "asset0"
-	keyPoolAsset1      = "asset1"
-	keyPoolReserve0    = "reserve0"
-	keyPoolReserve1    = "reserve1"
-	keyPoolFee         = "fee"
-	keyPoolTotalLP     = "total_lp"
-	keyPoolLpPrefix    = "lp/" // lp/{address}
-	keyPoolFee0        = "fee0"
-	keyPoolFee1        = "fee1"
+	keyVersion          = "version"
+	keyNextPoolId       = "next_pool_id"
+	keyPoolPrefix       = "pool/" // pool/{poolId}/...
+	keyPoolAsset0       = "asset0"
+	keyPoolAsset1       = "asset1"
+	keyPoolReserve0     = "reserve0"
+	keyPoolReserve1     = "reserve1"
+	keyPoolFee          = "fee"
+	keyPoolTotalLP      = "total_lp"
+	keyPoolLpPrefix     = "lp/" // lp/{address}
+	keyPoolFee0         = "fee0"
+	keyPoolFee1         = "fee1"
 	keyPoolFeeLastClaim = "fee_last_claim"
 )
 
