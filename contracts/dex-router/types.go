@@ -17,6 +17,24 @@ type DexInstruction struct {
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
+//tinyjson:json
+type CreatePoolParams struct {
+	Asset0 string `json:"asset0"`
+	Asset1 string `json:"asset1"`
+	FeeBps uint64 `json:"fee_bps"`
+}
+
+//tinyjson:json
+type PoolInfo struct {
+	Asset0   string `json:"asset0"`
+	Asset1   string `json:"asset1"`
+	Reserve0 uint64 `json:"reserve0"`
+	Reserve1 uint64 `json:"reserve1"`
+	Fee      uint64 `json:"fee"`
+	TotalLp  uint64 `json:"total_lp"`
+}
+
+//tinyjson:json
 type ReturnAddress struct {
 	Chain   string `json:"chain"`
 	Address string `json:"address"`

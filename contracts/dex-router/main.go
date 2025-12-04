@@ -41,13 +41,8 @@ func CreatePool(payload *string) *string {
 		return &[]string{"error", "invalid payload"}[1]
 	}
 
-	var params struct {
-		Asset0 string `json:"asset0"`
-		Asset1 string `json:"asset1"`
-		FeeBps uint64 `json:"fee_bps"`
-	}
-
-	if err := json.Unmarshal(rawMsg, &params); err != nil {
+	var params CreatePoolParams
+	if err := tinyjson.Unmarshal(rawMsg, &params); err != nil {
 		return &[]string{"error", "invalid payload"}[1]
 	}
 
@@ -552,27 +547,21 @@ func GetPool(payload *string) *string {
 		return &[]string{"error", "pool not found"}[1]
 	}
 
-	poolInfo := map[string]interface{}{
-		"asset0":   asset0,
-		"asset1":   getPoolAsset1(poolId),
-		"reserve0": getPoolReserve0(poolId),
-		"reserve1": getPoolReserve1(poolId),
-		"fee":      getPoolFee(poolId),
-		"total_lp": getPoolTotalLp(poolId),
+	poolInfo := PoolInfo{
+		Asset0:   asset0,
+		Asset1:   getPoolAsset1(poolId),
+		Reserve0: getPoolReserve0(poolId),
+		Reserve1: getPoolReserve1(poolId),
+		Fee:      getPoolFee(poolId),
+		TotalLp:  getPoolTotalLp(poolId),
 	}
 
-	jsonBytes, err := json.Marshal(poolInfo)
+	resultBytes, err := tinyjson.Marshal(&poolInfo)
 	if err != nil {
 		return &[]string{"error", "serialization failed"}[1]
 	}
 
-	var rawMsg tinyjson.RawMessage = jsonBytes
-	finalBytes, err := tinyjson.Marshal(&rawMsg)
-	if err != nil {
-		return &[]string{"error", "serialization failed"}[1]
-	}
-
-	result := string(finalBytes)
+	result := string(resultBytes)
 	return &result
 }
 

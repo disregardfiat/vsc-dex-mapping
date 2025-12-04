@@ -94,10 +94,25 @@ A unified smart contract that implements a complete decentralized exchange with 
 
 ## Building
 
-```bash
-cd contracts/dex-router
-tinygo build -o ../../bin/dex-router.wasm -target wasm main.go utils.go
-```
+### Prerequisites
+
+- [TinyGo](https://tinygo.org/getting-started/install/) for WASM compilation
+- tinyjson binary (included in project `/bin/tinyjson`)
+
+### Build Steps
+
+1. **Generate tinyjson marshalling code** (if types changed):
+   ```bash
+   cd contracts/dex-router
+   ../../bin/tinyjson -pkg  # Regenerates types_tinyjson.go
+   ```
+
+2. **Compile to WebAssembly**:
+   ```bash
+   tinygo build -o artifacts/main.wasm -target wasm main.go utils.go
+   ```
+
+Note: The tinyjson generated code is already included in the repository. Run step 1 only if you modify the JSON structures in `types.go`. Due to build constraints in the contract package, you may need to temporarily comment out SDK imports during regeneration.
 
 ## Architecture
 

@@ -1,4 +1,4 @@
-.PHONY: test build clean contracts services sdk
+.PHONY: test build clean contracts services sdk tinyjson
 
 # Test all components
 test:
@@ -25,6 +25,10 @@ sdk:
 contracts:
 	cd contracts/btc-mapping && tinygo build -o ../../bin/btc-mapping.wasm -target wasm main.go
 
+# Regenerate tinyjson code for contracts
+tinyjson:
+	cd contracts/dex-router && ../../bin/tinyjson -all types.go
+
 # Clean build artifacts
 clean:
 	rm -rf bin/
@@ -36,6 +40,8 @@ setup:
 	cd sdk/ts && npm install
 	# Install tinygo if not present
 	which tinygo || echo "Please install TinyGo: https://tinygo.org/getting-started/install/"
+	# Check for tinyjson binary
+	[ -f bin/tinyjson ] || echo "tinyjson binary included in bin/tinyjson"
 
 # Run E2E tests
 e2e:

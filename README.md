@@ -509,13 +509,37 @@ go test ./e2e/...
 
 ### Building
 
-```bash
-# Build all components
-make build
+#### Included Tools
+The repository includes pre-built binaries in the `bin/` directory:
+- `bin/tinyjson` - For generating JSON marshaling/unmarshaling code
+- `bin/cli` - CLI deployment and management tool
 
-# Build individual services
+#### Build All Components
+```bash
+make build
+```
+
+#### Build Individual Components
+```bash
+# Build services
 cd services/router && go build
+cd services/indexer && go build
+
+# Build contracts
 cd contracts/dex-router && tinygo build -target wasm
+```
+
+#### Regenerate Contract JSON Code (if types changed)
+```bash
+cd contracts/dex-router
+../../bin/tinyjson -pkg  # Regenerates types_tinyjson.go
+tinygo build -o artifacts/main.wasm -target wasm main.go utils.go
+```
+
+#### Use Makefile
+```bash
+make tinyjson  # Regenerate tinyjson code
+make contracts # Build contracts (after tinyjson regeneration)
 ```
 
 ### Development Workflow
@@ -523,8 +547,10 @@ cd contracts/dex-router && tinygo build -target wasm
 1. **Contract changes**:
    ```bash
    cd contracts/dex-router
+   # Edit types.go (if adding/changing JSON structures)
+   ../../bin/tinyjson -all types.go
    # Edit main.go
-   tinygo build -o ../../bin/dex-router.wasm -target wasm main.go utils.go
+   tinygo build -o artifacts/main.wasm -target wasm main.go utils.go
    go run ../../cli/main.go deploy
    ```
 
