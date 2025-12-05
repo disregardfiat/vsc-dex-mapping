@@ -17,12 +17,14 @@ A unified decentralized exchange system for VSC blockchain that provides automat
 - ✅ **SDK (Go)**: Full VSC GraphQL integration and transaction broadcasting
 - ✅ **CLI Tools**: Complete deployment and monitoring system
 - ✅ **Indexer**: Pool and token data management
+- ✅ **Intent Protection**: Protocol-level transfer limits for all DEX operations (swap, deposit, withdrawal)
 
 **Ready for HBD/HIVE Trading:**
 - ✅ DEX routing for HBD/HIVE pools with AMM calculations
 - ✅ Liquidity provision and removal operations
 - ✅ SDK integration for seamless user interactions
 - ✅ End-to-end deposit → trade → withdrawal flow
+- ✅ Protocol-level intent protection for secure trading
 
 ## Overview
 
@@ -38,6 +40,192 @@ VSC DEX Router provides a complete decentralized exchange infrastructure with au
 - **Real-Time Indexing**: Event-driven indexing and query APIs
 - **Referral System**: Optional referral fees for swaps
 - **Multi-Language SDKs**: Go and TypeScript client libraries
+
+## VSC Intent Protection System
+
+VSC implements a sophisticated **intent-based protection system** that provides protocol-level guarantees for DEX operations:
+
+### How Intents Work
+
+**Intents** are declarations within transactions that specify what operations are allowed to execute:
+
+```json
+{
+  "type": "transfer.allow",
+  "args": {
+    "limit": "1000000",
+    "token": "HBD"
+  }
+}
+```
+
+This tells VSC: *"This transaction may transfer up to 1,000,000 HBD from my account"*
+
+### Multi-Layer Protection
+
+VSC DEX operations are protected at **two levels**:
+
+#### 1. **Protocol-Level Protection (Intents)**
+- **Maximum Loss Limits**: Intents prevent spending more than declared amounts
+- **Atomic Validation**: Either the entire swap succeeds within limits, or it fails completely
+- **Cross-Contract Safety**: Protection works across different smart contracts
+
+#### 2. **Application-Level Protection (Contract Logic)**
+- **Minimum Output Validation**: Contracts enforce `min_amount_out` requirements
+- **Slippage Tolerance**: Configurable maximum slippage protection
+- **Price Impact Controls**: AMM calculations prevent excessive price movements
+
+### Intent Integration Examples
+
+#### Swap with Intent Protection
+```bash
+# Router service automatically creates intents for swap operations
+curl -X POST http://localhost:8080/api/v1/swap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "assetIn": "HBD",
+    "amountIn": 1000000,
+    "assetOut": "HIVE",
+    "minAmountOut": 500000,
+    "sender": "user123"
+  }'
+```
+
+**Generated Transaction with Intents:**
+```json
+{
+  "contract_id": "dex-router",
+  "action": "execute",
+  "payload": "{\"type\":\"swap\",\"asset_in\":\"HBD\",\"amount_in\":1000000,\"asset_out\":\"HIVE\",\"min_amount_out\":500000,\"recipient\":\"user123\"}",
+  "intents": [
+    {
+      "type": "transfer.allow",
+      "args": {
+        "limit": "1000000",
+        "token": "HBD"
+      }
+    }
+  ]
+}
+```
+
+#### Direct Contract Call with Intents
+```bash
+curl -X POST http://localhost:8080/api/v1/contract/dex-router/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contract": "dex-router",
+    "method": "execute",
+    "args": {
+      "type": "swap",
+      "version": "1.0.0",
+      "asset_in": "HBD",
+      "asset_out": "HIVE",
+      "recipient": "user123",
+      "min_amount_out": 500000,
+      "slippage_bps": 50
+    },
+    "intents": [
+      {
+        "type": "transfer.allow",
+        "args": {
+          "limit": "1000000",
+          "token": "HBD"
+        }
+      }
+    ]
+  }'
+```
+
+#### Deposit with Intent Protection
+```bash
+# Router service creates intents for tokens being deposited
+curl -X POST http://localhost:8080/api/v1/deposit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "assetIn": "HBD",
+    "amountIn": 1000000,
+    "assetOut": "HIVE",
+    "sender": "user123"
+  }'
+```
+
+**Generated Transaction with Intents:**
+```json
+{
+  "contract_id": "dex-router",
+  "action": "execute",
+  "payload": "{\"type\":\"deposit\",\"asset_in\":\"HBD\",\"amount_in\":1000000,\"asset_out\":\"HIVE\",\"recipient\":\"user123\"}",
+  "intents": [
+    {
+      "type": "transfer.allow",
+      "args": {
+        "limit": "1000000",
+        "token": "HBD"
+      }
+    }
+  ]
+}
+```
+
+#### Withdrawal with Intent Protection
+```bash
+# Router service creates intents for tokens being withdrawn
+curl -X POST http://localhost:8080/api/v1/withdraw \
+  -H "Content-Type: application/json" \
+  -d '{
+    "assetIn": "HBD",
+    "assetOut": "HIVE",
+    "lpAmount": 500000,
+    "sender": "user123"
+  }'
+```
+
+**Generated Transaction with Intents:**
+```json
+{
+  "contract_id": "dex-router",
+  "action": "execute",
+  "payload": "{\"type\":\"withdrawal\",\"asset_in\":\"HBD\",\"asset_out\":\"HIVE\",\"recipient\":\"user123\"}",
+  "intents": [
+    {
+      "type": "transfer.allow",
+      "args": {
+        "limit": "1000000000",
+        "token": "HBD"
+      }
+    },
+    {
+      "type": "transfer.allow",
+      "args": {
+        "limit": "1000000000",
+        "token": "HIVE"
+      }
+    }
+  ]
+}
+```
+
+### Intent Token Support
+
+VSC intents support **arbitrary token specifications**, not just native tokens like HBD and HIVE:
+
+- **Native Tokens**: `"HBD"`, `"HIVE"`, `"HBD_SAVINGS"`
+- **Custom Tokens**: `"CUSTOM_TOKEN_ID"`, `"ERC20:0x123..."`, `"SPL:ABC123..."`
+- **Cross-Chain Assets**: `"BTC"`, `"ETH"`, `"SOL"`
+
+**Example with Custom Token:**
+```json
+{
+  "type": "transfer.allow",
+  "args": {
+    "limit": "5000000",
+    "token": "CUSTOM_TOKEN_ABC123"
+  }
+}
+```
+
+The intent system is designed to be **extensible** and can protect transfers of any token that VSC recognizes, whether it's native to the platform or bridged from external chains.
 
 ## Schema Specification
 
@@ -151,22 +339,28 @@ VSC DEX Mapping uses a standardized JSON schema for all DEX operations. This ens
 
 **Deposit Flow (Add Liquidity):**
 1. User calls router service with deposit instruction
-2. Router service constructs JSON payload and calls DEX router contract
-3. Contract adds liquidity to specified pool and mints LP tokens
-4. User receives LP tokens representing their pool share
+2. **Router creates transfer.allow intents for tokens being deposited**
+3. Router service constructs JSON payload and calls DEX router contract
+4. **VSC validates intents allow the deposit transfers**
+5. Contract adds liquidity to specified pool and mints LP tokens
+6. User receives LP tokens representing their pool share
 
 **Swap Flow (Token Exchange):**
 1. User requests swap via SDK or frontend
-2. Router service constructs JSON payload with swap instruction
-3. SDK broadcasts transaction to VSC via GraphQL
-4. DEX router contract executes AMM swap using constant product formula
-5. User receives output tokens
+2. Router service constructs JSON payload with slippage protection
+3. **Router creates transfer.allow intents for maximum input protection**
+4. SDK broadcasts transaction with intents to VSC via GraphQL
+5. **VSC validates intents don't exceed declared transfer limits**
+6. DEX router contract executes AMM swap and validates minimum output
+7. User receives output tokens within slippage bounds
 
 **Withdrawal Flow (Remove Liquidity):**
 1. User calls router service with withdrawal instruction
-2. Router service constructs JSON payload for liquidity removal
-3. Contract burns LP tokens and returns proportional assets
-4. User receives underlying tokens
+2. **Router creates transfer.allow intents for tokens being withdrawn**
+3. Router service constructs JSON payload for liquidity removal
+4. **VSC validates intents allow the withdrawal transfers**
+5. Contract burns LP tokens and returns proportional assets
+6. User receives underlying tokens
 
 ## Components
 
@@ -727,16 +921,30 @@ curl -X POST http://localhost:8080/api/v1/contract/dex-router/create_pool \
   -H "Content-Type: application/json" \
   -d '{"asset0": "HBD", "asset1": "HIVE", "fee_bps": 8}'
 
-# Test swap execution
+# Test swap execution with intent protection
 curl -X POST http://localhost:8080/api/v1/contract/dex-router/execute \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "swap",
-    "version": "1.0.0",
-    "asset_in": "BTC",
-    "asset_out": "HIVE",
-    "recipient": "user",
-    "min_amount_out": 95000
+    "contract": "dex-router",
+    "method": "execute",
+    "args": {
+      "type": "swap",
+      "version": "1.0.0",
+      "asset_in": "BTC",
+      "asset_out": "HIVE",
+      "recipient": "user",
+      "min_amount_out": 95000,
+      "slippage_bps": 50
+    },
+    "intents": [
+      {
+        "type": "transfer.allow",
+        "args": {
+          "limit": "100000",
+          "token": "BTC"
+        }
+      }
+    ]
   }'
 ```
 

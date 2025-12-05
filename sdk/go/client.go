@@ -9,10 +9,17 @@ import (
 	"log"
 	"net/http"
 
+	contracts "vsc-node/modules/db/vsc/contracts"
+	transactionpool "vsc-node/modules/transaction-pool"
+
 	"github.com/hasura/go-graphql-client"
-	vscnode "vsc-node/modules/state-processing"
-	"vsc-node/modules/transaction-pool"
 )
+
+// Intent represents a VSC transaction intent
+type Intent struct {
+	Type string            `json:"type"`
+	Args map[string]string `json:"args"`
+}
 
 // Client provides SDK methods for VSC DEX mapping operations
 type Client struct {
@@ -21,10 +28,10 @@ type Client struct {
 }
 
 type Config struct {
-	Endpoint   string
-	Username   string
-	ActiveKey  string
-	Contracts  ContractAddresses
+	Endpoint  string
+	Username  string
+	ActiveKey string
+	Contracts ContractAddresses
 }
 
 type ContractAddresses struct {
@@ -38,10 +45,6 @@ func NewClient(config Config) *Client {
 		transactionCreator: nil, // TODO: Initialize TransactionCrafter if needed
 	}
 }
-
-
-
-
 
 // ComputeDexRoute computes an optimal DEX swap route
 func (c *Client) ComputeDexRoute(ctx context.Context, fromAsset, toAsset string, amount int64) (*RouteResult, error) {
@@ -87,8 +90,8 @@ func (c *Client) ComputeDexRoute(ctx context.Context, fromAsset, toAsset string,
 }
 
 type RouteResult struct {
-	AmountOut  int64    `json:"amount_out"`
-	Route      []string `json:"route"`
+	AmountOut   int64    `json:"amount_out"`
+	Route       []string `json:"route"`
 	PriceImpact float64  `json:"price_impact"`
 	Fee         int64    `json:"fee"`
 }
@@ -116,6 +119,12 @@ func (c *Client) ExecuteDexSwap(ctx context.Context, route *RouteResult) error {
 // ExecuteDexOperation implements the router.DEXExecutor interface
 // This executes operations on the unified DEX router contract
 func (c *Client) ExecuteDexOperation(ctx context.Context, operationType string, payload string) error {
+	return c.ExecuteDexOperationWithIntents(ctx, operationType, payload, nil)
+}
+
+// ExecuteDexOperationWithIntents implements the router.DEXExecutor interface
+// This executes operations on the unified DEX router contract with intents
+func (c *Client) ExecuteDexOperationWithIntents(ctx context.Context, operationType string, payload string, intents []Intent) error {
 	// Call the unified DEX router contract
 	payloadJSON := fmt.Sprintf(`{
 		"contract": "%s",
@@ -123,7 +132,7 @@ func (c *Client) ExecuteDexOperation(ctx context.Context, operationType string, 
 		"args": %s
 	}`, c.config.DexRouter, operationType, payload)
 
-	return c.broadcastTx(ctx, payloadJSON)
+	return c.broadcastTxWithIntents(ctx, payloadJSON, intents)
 }
 
 // ExecuteDexSwapRouter implements the router.DEXExecutor interface
@@ -131,10 +140,10 @@ func (c *Client) ExecuteDexOperation(ctx context.Context, operationType string, 
 func (c *Client) ExecuteDexSwapRouter(ctx context.Context, amountOut int64, route []string, fee int64) error {
 	// Create SDK RouteResult from parameters
 	sdkRoute := &RouteResult{
-		AmountOut:  amountOut,
-		Route:      route,
+		AmountOut:   amountOut,
+		Route:       route,
 		PriceImpact: 0, // TODO: Calculate price impact
-		Fee:        fee,
+		Fee:         fee,
 	}
 
 	return c.ExecuteDexSwap(ctx, sdkRoute)
@@ -142,6 +151,11 @@ func (c *Client) ExecuteDexSwapRouter(ctx context.Context, amountOut int64, rout
 
 // broadcastTx broadcasts a transaction to VSC
 func (c *Client) broadcastTx(ctx context.Context, payload string) error {
+	return c.broadcastTxWithIntents(ctx, payload, nil)
+}
+
+// broadcastTxWithIntents broadcasts a transaction to VSC with intents
+func (c *Client) broadcastTxWithIntents(ctx context.Context, payload string, intents []Intent) error {
 	// Parse the payload to extract contract call parameters
 	var contractCall map[string]interface{}
 	if err := json.Unmarshal([]byte(payload), &contractCall); err != nil {
@@ -158,6 +172,18 @@ func (c *Client) broadcastTx(ctx context.Context, payload string) error {
 		return fmt.Errorf("failed to marshal contract call args: %w", err)
 	}
 
+	// Convert SDK intents to contracts intents
+	var contractIntents []contracts.Intent
+	if intents != nil {
+		contractIntents = make([]contracts.Intent, len(intents))
+		for i, intent := range intents {
+			contractIntents[i] = contracts.Intent{
+				Type: intent.Type,
+				Args: intent.Args,
+			}
+		}
+	}
+
 	// Create VSC contract call transaction
 	vscCall := &transactionpool.VscContractCall{
 		Caller:     c.config.Username, // Use configured username as caller
@@ -165,6 +191,7 @@ func (c *Client) broadcastTx(ctx context.Context, payload string) error {
 		RcLimit:    1000, // Default RC limit
 		Action:     method,
 		Payload:    string(argsJSON), // Payload must be JSON string
+		Intents:    contractIntents,  // Add intents for protocol-level protection
 		NetId:      "vsc-mainnet",
 	}
 
@@ -176,7 +203,7 @@ func (c *Client) broadcastTx(ctx context.Context, payload string) error {
 
 	// Create VSC transaction
 	tx := transactionpool.VSCTransaction{
-		Ops: []transactionpool.VSCTransactionOp{op},
+		Ops:   []transactionpool.VSCTransactionOp{op},
 		Nonce: 0, // TODO: Implement proper nonce management
 	}
 
@@ -243,7 +270,6 @@ func (c *Client) GetPools(ctx context.Context) ([]PoolInfo, error) {
 	return pools, nil
 }
 
-
 type PoolInfo struct {
 	ID       string  `json:"id"`
 	Asset0   string  `json:"asset0"`
@@ -252,4 +278,3 @@ type PoolInfo struct {
 	Reserve1 uint64  `json:"reserve1"`
 	Fee      float64 `json:"fee"`
 }
-

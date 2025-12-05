@@ -22,6 +22,14 @@ func (m *mockDEXExecutor) ExecuteDexOperation(ctx context.Context, operationType
 	return nil
 }
 
+func (m *mockDEXExecutor) ExecuteDexOperationWithIntents(ctx context.Context, operationType string, payload string, intents []Intent) error {
+	log.Printf("Mock DEXExecutor: Executing %s with payload %s and %d intents", operationType, payload, len(intents))
+	for i, intent := range intents {
+		log.Printf("  Intent %d: %s with args %v", i, intent.Type, intent.Args)
+	}
+	return nil
+}
+
 func (m *mockDEXExecutor) ExecuteDexSwap(ctx context.Context, amountOut int64, route []string, fee int64) error {
 	log.Printf("Mock DEXExecutor: Executing swap with amountOut %d, route %v, fee %d", amountOut, route, fee)
 	return nil
@@ -29,12 +37,12 @@ func (m *mockDEXExecutor) ExecuteDexSwap(ctx context.Context, amountOut int64, r
 
 func main() {
 	var (
-		vscNode        = flag.String("vsc-node", "http://localhost:4000", "VSC node GraphQL endpoint")
-		vscKey         = flag.String("vsc-key", "", "VSC active key for transactions")
-		vscUsername    = flag.String("vsc-username", "", "VSC username")
-		port           = flag.String("port", "8080", "HTTP server port")
+		vscNode         = flag.String("vsc-node", "http://localhost:4000", "VSC node GraphQL endpoint")
+		vscKey          = flag.String("vsc-key", "", "VSC active key for transactions")
+		vscUsername     = flag.String("vsc-username", "", "VSC username")
+		port            = flag.String("port", "8080", "HTTP server port")
 		indexerEndpoint = flag.String("indexer-endpoint", "http://localhost:8081", "Indexer service HTTP endpoint")
-		dexRouter      = flag.String("dex-router-contract", "", "DEX router contract ID")
+		dexRouter       = flag.String("dex-router-contract", "", "DEX router contract ID")
 	)
 	flag.Parse()
 
@@ -59,7 +67,7 @@ func main() {
 	mockExecutor := &mockDEXExecutor{}
 
 	svc := router.NewService(config, mockExecutor)
-	
+
 	// Connect router to indexer for real-time pool data
 	if *indexerEndpoint != "" {
 		poolQuerier := router.NewIndexerPoolQuerier(*indexerEndpoint)
@@ -68,7 +76,7 @@ func main() {
 	} else {
 		log.Printf("Warning: No indexer endpoint provided, router will use hardcoded fallback pools")
 	}
-	
+
 	server := router.NewServer(svc, *port)
 
 	// Handle graceful shutdown

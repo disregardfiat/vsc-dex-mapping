@@ -7,9 +7,16 @@ import (
 	"log"
 )
 
+// Intent represents a VSC transaction intent
+type Intent struct {
+	Type string            `json:"type"`
+	Args map[string]string `json:"args"`
+}
+
 // DEXExecutor interface for executing DEX operations
 type DEXExecutor interface {
 	ExecuteDexOperation(ctx context.Context, operationType string, payload string) error
+	ExecuteDexOperationWithIntents(ctx context.Context, operationType string, payload string, intents []Intent) error
 	ExecuteDexSwap(ctx context.Context, amountOut int64, route []string, fee int64) error
 }
 
@@ -20,9 +27,9 @@ type Service struct {
 }
 
 type VSCConfig struct {
-	Endpoint       string
-	Key            string
-	Username       string
+	Endpoint          string
+	Key               string
+	Username          string
 	DexRouterContract string
 }
 
@@ -49,10 +56,10 @@ type DepositParams struct {
 
 // WithdrawalParams represents a withdrawal request
 type WithdrawalParams struct {
-	Sender      string
-	AssetIn     string
-	AssetOut    string
-	LpAmount    int64
+	Sender   string
+	AssetIn  string
+	AssetOut string
+	LpAmount int64
 }
 
 // SwapResult represents the result of a DEX operation
@@ -63,7 +70,6 @@ type SwapResult struct {
 	Route        []string
 	ErrorMessage string
 }
-
 
 // ExecuteSwap executes a swap through the unified DEX router contract
 func (r *Service) ExecuteSwap(params SwapParams) (*SwapResult, error) {
@@ -77,11 +83,11 @@ func (r *Service) ExecuteSwap(params SwapParams) (*SwapResult, error) {
 
 	// Construct JSON payload according to schema
 	payload := map[string]interface{}{
-		"type":          "swap",
-		"version":       "1.0.0",
-		"asset_in":      params.AssetIn,
-		"asset_out":     params.AssetOut,
-		"recipient":     params.Sender,
+		"type":           "swap",
+		"version":        "1.0.0",
+		"asset_in":       params.AssetIn,
+		"asset_out":      params.AssetOut,
+		"recipient":      params.Sender,
 		"min_amount_out": params.MinAmountOut,
 	}
 
@@ -104,8 +110,20 @@ func (r *Service) ExecuteSwap(params SwapParams) (*SwapResult, error) {
 		}, nil
 	}
 
-	// Execute through DEX executor
-	err = r.dexExecutor.ExecuteDexOperation(context.Background(), "execute", string(payloadBytes))
+	// Create intents for the swap operation
+	// Allow transfer of input asset up to the estimated input amount
+	intents := []Intent{
+		{
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": fmt.Sprintf("%d", params.AmountIn), // Maximum input amount
+				"token": params.AssetIn,
+			},
+		},
+	}
+
+	// Execute through DEX executor with intents
+	err = r.dexExecutor.ExecuteDexOperationWithIntents(context.Background(), "execute", string(payloadBytes), intents)
 	if err != nil {
 		return &SwapResult{
 			Success:      false,
@@ -126,9 +144,9 @@ func (r *Service) ExecuteSwap(params SwapParams) (*SwapResult, error) {
 func (s *Service) ExecuteDeposit(params DepositParams) (*SwapResult, error) {
 	// Construct JSON payload for deposit
 	payload := map[string]interface{}{
-		"type":     "deposit",
-		"version":  "1.0.0",
-		"asset_in": params.AssetIn,
+		"type":      "deposit",
+		"version":   "1.0.0",
+		"asset_in":  params.AssetIn,
 		"asset_out": params.AssetOut,
 		"recipient": params.Sender,
 		// Additional deposit parameters would go here
@@ -142,7 +160,19 @@ func (s *Service) ExecuteDeposit(params DepositParams) (*SwapResult, error) {
 		}, nil
 	}
 
-	err = s.dexExecutor.ExecuteDexOperation(context.Background(), "execute", string(payloadBytes))
+	// Create intents for the deposit operation
+	// Allow transfer of input asset (the amount being deposited)
+	intents := []Intent{
+		{
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": fmt.Sprintf("%d", params.AmountIn),
+				"token": params.AssetIn,
+			},
+		},
+	}
+
+	err = s.dexExecutor.ExecuteDexOperationWithIntents(context.Background(), "execute", string(payloadBytes), intents)
 	if err != nil {
 		return &SwapResult{
 			Success:      false,
@@ -160,9 +190,9 @@ func (s *Service) ExecuteDeposit(params DepositParams) (*SwapResult, error) {
 func (s *Service) ExecuteWithdrawal(params WithdrawalParams) (*SwapResult, error) {
 	// Construct JSON payload for withdrawal
 	payload := map[string]interface{}{
-		"type":     "withdrawal",
-		"version":  "1.0.0",
-		"asset_in": params.AssetIn,
+		"type":      "withdrawal",
+		"version":   "1.0.0",
+		"asset_in":  params.AssetIn,
 		"asset_out": params.AssetOut,
 		"recipient": params.Sender,
 		// Additional withdrawal parameters would go here
@@ -176,7 +206,28 @@ func (s *Service) ExecuteWithdrawal(params WithdrawalParams) (*SwapResult, error
 		}, nil
 	}
 
-	err = s.dexExecutor.ExecuteDexOperation(context.Background(), "execute", string(payloadBytes))
+	// Create intents for the withdrawal operation
+	// For withdrawals, we need to allow the contract to transfer underlying assets back
+	// Since the exact amounts are determined by the contract, we use a broad allowance
+	// In practice, this might need to be calculated based on expected withdrawal amounts
+	intents := []Intent{
+		{
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": "1000000000", // Large limit - would be calculated based on position
+				"token": params.AssetIn,
+			},
+		},
+		{
+			Type: "transfer.allow",
+			Args: map[string]string{
+				"limit": "1000000000", // Large limit - would be calculated based on position
+				"token": params.AssetOut,
+			},
+		},
+	}
+
+	err = s.dexExecutor.ExecuteDexOperationWithIntents(context.Background(), "execute", string(payloadBytes), intents)
 	if err != nil {
 		return &SwapResult{
 			Success:      false,

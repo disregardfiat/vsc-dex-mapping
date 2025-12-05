@@ -21,6 +21,13 @@ func (m *mockDEXExecutor) ExecuteDexOperation(ctx context.Context, operationType
 	return nil
 }
 
+func (m *mockDEXExecutor) ExecuteDexOperationWithIntents(ctx context.Context, operationType string, payload string, intents []Intent) error {
+	// Track the operation for testing with intents (same format as ExecuteDexOperation for compatibility)
+	operation := operationType + ":" + payload
+	m.executedOperations = append(m.executedOperations, operation)
+	return nil
+}
+
 func (m *mockDEXExecutor) ExecuteDexSwap(ctx context.Context, amountOut int64, route []string, fee int64) error {
 	// Keep for backward compatibility
 	return nil
